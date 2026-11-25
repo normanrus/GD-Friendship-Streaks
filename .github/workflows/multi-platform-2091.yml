@@ -39,7 +39,7 @@ jobs:
       - name: Target GD 2.2091
         shell: bash
         run: |
-          sed -i 's/"geode": "5.11.2"/"geode": "6.0.0"/; s/"2.2081"/"2.2091"/g' mod.json
+          python3 -c "import json,pathlib;p=pathlib.Path('mod.json');m=json.loads(p.read_text());m['geode']='6.0.0';m['gd']={k:'2.2091' for k in m['gd']};p.write_text(json.dumps(m,indent=4))"
           grep -A5 '"gd"' mod.json
 
       - name: Build the mod
