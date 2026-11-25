@@ -10,6 +10,7 @@ Shared (mutual) daily streaks between two paired GD players. Flame badge in the 
 
 - GD 2.2081 with Geode SDK 5.11.2 (`mod.json` in the repo points here)
 - GD 2.2091 with Geode SDK 6.0.0
+- CI also builds Windows and macOS; iOS is disabled because Geode's own bindings fail to build on the runner (FMOD types missing), not because of mod code
 
 Same sources for both; only `mod.json`'s `geode` and `gd` fields change. `scripts/build_all.sh` does both.
 

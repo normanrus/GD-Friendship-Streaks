@@ -20,7 +20,7 @@ Nothing about vanilla gameplay changes: the mod only decorates existing screens 
 | | |
 |---|---|
 | Geometry Dash | 2.2081 (Geode 5.11.2) or 2.2091 (Geode 6.0.0) |
-| Platform | Windows, Android 32/64 |
+| Platform | Windows, macOS, Android 32/64 (iOS is untested and not built) |
 | Account | a real Geometry Dash account, that is how the two players identify each other |
 | Server | one small sync server, see below |
 
