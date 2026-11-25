@@ -1,0 +1,63 @@
+name: Build Geode Mod (GD 2.2091)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "**"
+
+# Same sources as multi-platform.yml, but built against Geode 6.0.0 for GD 2.2091.
+# GD 2.2091 renamed the friends list row class, so the two versions need their
+# own binaries and their own mod.json metadata.
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+        - name: Windows
+          os: windows-latest
+
+        - name: macOS
+          os: macos-latest
+
+        - name: Android32
+          os: ubuntu-latest
+          target: Android32
+
+        - name: Android64
+          os: ubuntu-latest
+          target: Android64
+
+    name: 2.2091 ${{ matrix.config.name }}
+    runs-on: ${{ matrix.config.os }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Target GD 2.2091
+        shell: bash
+        run: |
+          sed -i 's/"geode": "5.11.2"/"geode": "6.0.0"/; s/"2.2081"/"2.2091"/g' mod.json
+          grep -A5 '"gd"' mod.json
+
+      - name: Build the mod
+        uses: geode-sdk/build-geode-mod@main
+        with:
+          combine: true
+          target: ${{ matrix.config.target }}
+
+  package:
+    name: Package builds (2.2091)
+    runs-on: ubuntu-latest
+    needs: ['build']
+
+    steps:
+      - uses: geode-sdk/build-geode-mod/combine@main
+        id: build
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: Build Output 2.2091
+          path: ${{ steps.build.outputs.build-output }}
