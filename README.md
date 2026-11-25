@@ -21,7 +21,7 @@ Nothing about vanilla gameplay changes: the mod only decorates existing screens 
 |---|---|
 | Geometry Dash | 2.2081 (Geode 5.11.2) or 2.2091 (Geode 6.0.0) |
 | Platform | Windows, macOS, Android 32/64 (iOS is untested and not built) |
-| Known limit | On Windows with GD 2.2091 the game does not expose the message callback, so the friend window shows **Mark written** and you confirm the send yourself |
+| Known limits on GD 2.2091 | Windows: the game does not expose the message callback, so the friend window shows **Mark written** and you confirm the send yourself. macOS: the friends list row callback is unbound, so the flame next to a name is not drawn (the message list and profile still show it) |
 | Account | a real Geometry Dash account, that is how the two players identify each other |
 | Server | one small sync server, see below |
 

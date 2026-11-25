@@ -17,3 +17,11 @@
 #else
     #define FSTREAK_CAN_HOOK_MESSAGE 1
 #endif
+
+// The friends list row lost its macOS address in 2.2091, so the flame next to
+// the name cannot be drawn there.
+#if defined(GEODE_IS_MACOS) && defined(GEODE_COMP_GD_VERSION) && GEODE_COMP_GD_VERSION >= 22091
+    #define FSTREAK_CAN_HOOK_USER_CELL 0
+#else
+    #define FSTREAK_CAN_HOOK_USER_CELL 1
+#endif

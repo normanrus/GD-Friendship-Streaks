@@ -50,7 +50,9 @@ The mod parses exactly the JSON produced by `server/server.py` (`PairState::from
 - `FSTREAK_CAN_OPEN_WRITE_POPUP` — `GJWriteMessagePopup::create` only has an address on Android for GD 2.2091 (all platforms for 2.2081). Elsewhere the friend window opens the profile page instead.
 - `FSTREAK_CAN_HOOK_MESSAGE` — GD 2.2091 does not bind `uploadMessageFinished` on Windows, so the hook and the automatic tracking are compiled out there and the window shows **Mark written**, which reports the event by pair id.
 
-Both come from `GEODE_COMP_GD_VERSION` (22081 / 22091) and the `GEODE_IS_*` macros. Check `build-<target>/bindings/bindings/Geode/CodegenData.json` (`bindings.win` / `bindings.android32`) before adding a call to a GD class: `missing` means the symbol is not available on that platform.
+- `FSTREAK_CAN_HOOK_USER_CELL` — GD 2.2091 has no macOS address for `GJCompactUserCell::loadFromScore`, so the friends list flame is compiled out there.
+
+All three come from `GEODE_COMP_GD_VERSION` (22081 / 22091) and the `GEODE_IS_*` macros. Check `build-<target>/bindings/bindings/Geode/CodegenData.json` (`bindings.win` / `bindings.android32`) before adding a call to a GD class: `missing` means the symbol is not available on that platform.
 
 ## Layout rules of thumb
 

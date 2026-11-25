@@ -121,6 +121,7 @@ class $modify(FriendshipStreakMenuLayer, MenuLayer) {
     }
 };
 
+#if FSTREAK_CAN_HOOK_USER_CELL
 class $modify(FriendshipStreakUserCell, FSTREAK_USER_CELL) {
     void loadFromScore(GJUserScore* score) {
         FSTREAK_USER_CELL::loadFromScore(score);
@@ -145,6 +146,7 @@ class $modify(FriendshipStreakUserCell, FSTREAK_USER_CELL) {
         replaceFlame(this, *pair, position);
     }
 };
+#endif
 
 class $modify(FriendshipStreakMessageCell, GJMessageCell) {
     void loadFromMessage(GJUserMessage* message) {
