@@ -39,7 +39,7 @@ Pick the file that matches your GD version. This matters: a build made for 2.208
 | GD 2.2081 | 5.11.2 | `friendship-streaks-v1.0.0-gd2.2081-windows-macos-android.geode` |
 | GD 2.2091 | 6.0.0 | `friendship-streaks-v1.0.0-gd2.2091-windows-macos-android.geode` |
 
-Each of those single files contains the Windows, macOS and both Android binaries. If you only need Android there are smaller `-gd2.2081-android64/-android32` and `-gd2.2091-android64/-android32` files next to them.
+Each of those single files contains the Windows, macOS and both Android binaries, and Geode loads the right one for your platform. If Geode reports the wrong GD version, the other file is the one you want: the version is baked into the package metadata and cannot be switched at install time.
 
 ## Pairing with a friend
 
