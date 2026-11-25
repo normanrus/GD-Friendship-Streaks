@@ -6,8 +6,14 @@
 #include "../Notify.hpp"
 #include "../StreakStore.hpp"
 
-#include <Geode/binding/GJWriteMessagePopup.hpp>
+#include "Platform.hpp"
+
 #include <Geode/binding/FLAlertLayer.hpp>
+#if FSTREAK_CAN_OPEN_WRITE_POPUP
+#include <Geode/binding/GJWriteMessagePopup.hpp>
+#else
+#include <Geode/binding/ProfilePage.hpp>
+#endif
 
 using namespace geode::prelude;
 
@@ -18,6 +24,15 @@ constexpr float POPUP_WIDTH = 400.f;
 constexpr float POPUP_HEIGHT = 340.f;
 
 constexpr int CALENDAR_DAYS = 14;
+
+#if FSTREAK_CAN_HOOK_MESSAGE
+constexpr float LEFT_BUTTON_X = -78.f;
+constexpr float RIGHT_BUTTON_X = 78.f;
+#else
+// Three buttons on Windows 2.2091, where the player confirms the send by hand.
+constexpr float LEFT_BUTTON_X = -112.f;
+constexpr float RIGHT_BUTTON_X = 112.f;
+#endif
 constexpr float CELL_SIZE = 30.f;
 constexpr float CELL_GAP = 9.f;
 
@@ -253,12 +268,23 @@ void FriendStreakDetailPopup::buildFooter() {
     auto menu = CCMenu::create();
     menu->setPosition({0.f, -32.f});
     footer->addChild(menu);
-    if (auto message = ui::button("Send message", 0.85f, this, menu_selector(FriendStreakDetailPopup::onMessage))) {
-        message->setPosition({-78.f, 0.f});
+#if FSTREAK_CAN_OPEN_WRITE_POPUP
+    auto messageLabel = "Send message";
+#else
+    auto messageLabel = "Profile";
+#endif
+    if (auto message = ui::button(messageLabel, 0.85f, this, menu_selector(FriendStreakDetailPopup::onMessage))) {
+        message->setPosition({LEFT_BUTTON_X, 0.f});
         menu->addChild(message);
     }
+#if !FSTREAK_CAN_HOOK_MESSAGE
+    if (auto mark = ui::button("Mark written", 0.85f, this, menu_selector(FriendStreakDetailPopup::onMarkWritten))) {
+        mark->setPosition({0.f, 0.f});
+        menu->addChild(mark);
+    }
+#endif
     if (auto unlink = ui::button("Unlink", 0.85f, this, menu_selector(FriendStreakDetailPopup::onUnlink))) {
-        unlink->setPosition({78.f, 0.f});
+        unlink->setPosition({RIGHT_BUTTON_X, 0.f});
         menu->addChild(unlink);
     }
 }
@@ -282,10 +308,26 @@ void FriendStreakDetailPopup::onTick(float) {
 }
 
 void FriendStreakDetailPopup::onMessage(CCObject*) {
+#if FSTREAK_CAN_OPEN_WRITE_POPUP
     if (auto popup = GJWriteMessagePopup::create(m_pair.friendId, 0)) {
         popup->show();
     }
+#else
+    if (auto page = ProfilePage::create(m_pair.friendId, false)) {
+        page->show();
+    }
+#endif
 }
+
+#if !FSTREAK_CAN_HOOK_MESSAGE
+void FriendStreakDetailPopup::onMarkWritten(CCObject*) {
+    StreakStore::get().reportSentForPair(m_pair.id);
+    m_pair.youSentToday = true;
+    this->buildCalendar();
+    this->onTick(0.f);
+    notify::toast("Marked as written today");
+}
+#endif
 
 void FriendStreakDetailPopup::onUnlink(CCObject*) {
     auto* alert = FLAlertLayer::create(

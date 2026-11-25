@@ -203,6 +203,13 @@ void StreakStore::reportMessageSent(int friendAccountId) {
     flushPending();
 }
 
+void StreakStore::reportSentForPair(std::string const& pairId) {
+    load();
+    if (pairId.empty()) return;
+    enqueue(pairId, "sent");
+    flushPending();
+}
+
 void StreakStore::enqueue(std::string const& pairId, std::string const& kind) {
     auto duplicate = std::any_of(m_pending.begin(), m_pending.end(), [&](auto const& item) {
         return item.first == pairId && item.second == kind;

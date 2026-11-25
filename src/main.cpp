@@ -4,6 +4,9 @@
 // and never changes vanilla behaviour.
 
 #include <Geode/Geode.hpp>
+
+#include "Platform.hpp"
+
 #include <Geode/modify/FriendsProfilePage.hpp>
 #include <Geode/modify/GJMessageCell.hpp>
 #if __has_include(<Geode/modify/GJUserCell.hpp>)
@@ -14,7 +17,9 @@
 #include <Geode/modify/GJCompactUserCell.hpp>
 #define FSTREAK_USER_CELL GJCompactUserCell
 #endif
+#if FSTREAK_CAN_HOOK_MESSAGE
 #include <Geode/modify/GJWriteMessagePopup.hpp>
+#endif
 #include <Geode/modify/MenuLayer.hpp>
 #include <Geode/modify/ProfilePage.hpp>
 
@@ -214,6 +219,7 @@ class $modify(FriendshipStreakFriendsPage, FriendsProfilePage) {
     }
 };
 
+#if FSTREAK_CAN_HOOK_MESSAGE
 class $modify(FriendshipStreakWriteMessage, GJWriteMessagePopup) {
     void uploadMessageFinished(int accountID) {
         GJWriteMessagePopup::uploadMessageFinished(accountID);
@@ -221,3 +227,4 @@ class $modify(FriendshipStreakWriteMessage, GJWriteMessagePopup) {
         fstreak::StreakStore::get().reportMessageSent(accountID);
     }
 };
+#endif

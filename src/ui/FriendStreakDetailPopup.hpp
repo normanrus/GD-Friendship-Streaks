@@ -5,6 +5,7 @@
 #include <Geode/Geode.hpp>
 #include <Geode/ui/Popup.hpp>
 
+#include "../Platform.hpp"
 #include "../StreakModel.hpp"
 
 namespace fstreak {
@@ -23,6 +24,9 @@ private:
     void buildFooter();
 
     void onMessage(cocos2d::CCObject* sender);
+#if !FSTREAK_CAN_HOOK_MESSAGE
+    void onMarkWritten(cocos2d::CCObject* sender);
+#endif
     void onUnlink(cocos2d::CCObject* sender);
     void onUnlinkConfirm(bool confirmed);
     void onTick(float dt);

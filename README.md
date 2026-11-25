@@ -21,6 +21,7 @@ Nothing about vanilla gameplay changes: the mod only decorates existing screens 
 |---|---|
 | Geometry Dash | 2.2081 (Geode 5.11.2) or 2.2091 (Geode 6.0.0) |
 | Platform | Windows, macOS, Android 32/64 (iOS is untested and not built) |
+| Known limit | On Windows with GD 2.2091 the game does not expose the message callback, so the friend window shows **Mark written** and you confirm the send yourself |
 | Account | a real Geometry Dash account, that is how the two players identify each other |
 | Server | one small sync server, see below |
 
@@ -31,10 +32,14 @@ Nothing about vanilla gameplay changes: the mod only decorates existing screens 
 3. Open the mod settings and set **Server URL** to your sync server.
 4. In game: main menu, click the flame, then **Link a friend**.
 
-Pick the file that matches your GD version:
+Pick the file that matches your GD version. This matters: a build made for 2.2081 will not load on 2.2091 and Geode will tell you the mod is for the wrong version.
 
-- `dist/2.2081/` for GD 2.2081 (Geode 5.11.2)
-- `dist/2.2091/` for GD 2.2091 (Geode 6.0.0, covers the 2.209 line)
+| Your game | Geode | Install this |
+|---|---|---|
+| GD 2.2081 | 5.11.2 | `friendship-streaks-v1.0.0-gd2.2081-windows-macos-android.geode` |
+| GD 2.2091 | 6.0.0 | `friendship-streaks-v1.0.0-gd2.2091-windows-macos-android.geode` |
+
+Each of those single files contains the Windows, macOS and both Android binaries. If you only need Android there are smaller `-gd2.2081-android64/-android32` and `-gd2.2091-android64/-android32` files next to them.
 
 ## Pairing with a friend
 
@@ -110,7 +115,7 @@ cmake --build build-android64
 
 Use `-DANDROID_ABI=armeabi-v7a` for the 32 bit build. For GD 2.2091, point `GEODE_SDK` at a Geode 6.0.0 checkout with its Android binaries installed and set `geode`/`gd` in `mod.json` to `6.0.0`/`2.2091`. `scripts/build_all.sh` does both variants in one go.
 
-Windows builds run in CI (`.github/workflows/multi-platform.yml`), which produces the combined `.geode` for Windows, Android and macOS from the same sources.
+Windows and macOS builds run in CI: `.github/workflows/multi-platform.yml` builds GD 2.2081, `.github/workflows/multi-platform-2091.yml` retargets `mod.json` to Geode 6.0.0 and builds GD 2.2091. Each produces its own combined `.geode`.
 
 ## Tests
 

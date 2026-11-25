@@ -38,6 +38,7 @@ public:
 
     /// Reports that the player sent a message to the paired friend today.
     void reportMessageSent(int friendAccountId);
+    void reportSentForPair(std::string const& pairId);
     void flushPending();
 
     void createInvite(std::function<void(std::string code, std::string error)> callback);
