@@ -6,7 +6,7 @@
 #include "../Notify.hpp"
 #include "../StreakStore.hpp"
 
-#include "Platform.hpp"
+#include "../Platform.hpp"
 
 #include <Geode/binding/FLAlertLayer.hpp>
 #if FSTREAK_CAN_OPEN_WRITE_POPUP
