@@ -12,7 +12,7 @@ namespace fstreak {
 namespace {
 
 constexpr float W = 300.f;
-constexpr float H = 250.f;
+constexpr float H = 244.f;
 
 cocos2d::CCSprite* dayDot(bool alive) {
     auto dot = cocos2d::CCSprite::create(alive ? "circle-on.png"_spr : "circle-off.png"_spr);
@@ -118,7 +118,7 @@ void StreakInfoPopup::buildPaired() {
     auto flame = FlameNode::create(36.f, false);
     if (flame) {
         flame->setStreak(pair->current);
-        flame->setPosition({56.f, 200.f});
+        flame->setPosition({56.f, 192.f});
         m_body->addChild(flame, 1);
     }
 
@@ -126,23 +126,23 @@ void StreakInfoPopup::buildPaired() {
         fmt::format("{}", pair->current), "bigFont.fnt", 1.f, pair->current > 0 ? ui::COLOR_GOLD : ui::COLOR_MUTED, {0.f, 0.5f}
     );
     if (count) {
-        count->setPosition({82.f, 200.f});
+        count->setPosition({82.f, 192.f});
         m_body->addChild(count, 1);
 
         auto unit = ui::label("day streak", "chatFont.fnt", 0.5f, ui::COLOR_MUTED, {0.f, 0.5f});
         if (unit) {
-            unit->setPosition({82.f + count->getContentSize().width * count->getScaleX() + 8.f, 197.f});
+            unit->setPosition({82.f + count->getContentSize().width * count->getScaleX() + 8.f, 189.f});
             m_body->addChild(unit, 1);
         }
     }
 
     if (auto with = ui::label(fmt::format("with {}", m_friendName), "chatFont.fnt", 0.52f, ui::COLOR_MUTED)) {
-        with->setPosition({W / 2.f, 174.f});
+        with->setPosition({W / 2.f, 166.f});
         m_body->addChild(with, 1);
     }
 
     if (auto caption = ui::label("last 7 days", "chatFont.fnt", 0.38f, ui::COLOR_MUTED)) {
-        caption->setPosition({W / 2.f, 152.f});
+        caption->setPosition({W / 2.f, 146.f});
         m_body->addChild(caption, 1);
     }
 
@@ -153,7 +153,7 @@ void StreakInfoPopup::buildPaired() {
     for (size_t i = 0; i < shown; ++i) {
         auto const& entry = days[days.size() - shown + i];
         if (auto dot = dayDot(entry.mutual)) {
-            dot->setPosition({firstX + spacing * static_cast<float>(i), 136.f});
+            dot->setPosition({firstX + spacing * static_cast<float>(i), 130.f});
             m_body->addChild(dot, 1);
         }
     }
@@ -169,9 +169,9 @@ void StreakInfoPopup::buildPaired() {
         }
     };
 
-    stat(110.f, "Best", fmt::format("{} days", pair->best));
-    stat(92.f, "Started", pair->startDay.empty() ? "-" : pair->startDay);
-    stat(74.f, "Last mutual", pair->lastStreakDay.empty() ? "-" : pair->lastStreakDay);
+    stat(104.f, "Best", fmt::format("{} days", pair->best));
+    stat(86.f, "Started", pair->startDay.empty() ? "-" : pair->startDay);
+    stat(68.f, "Last mutual", pair->lastStreakDay.empty() ? "-" : pair->lastStreakDay);
 
     std::string today;
     cocos2d::ccColor3B color = ui::COLOR_MUTED;
@@ -186,7 +186,7 @@ void StreakInfoPopup::buildPaired() {
         today = "Nobody wrote today yet.";
     }
     if (auto line = ui::label(today, "chatFont.fnt", 0.45f, color)) {
-        line->setPosition({W / 2.f, 50.f});
+        line->setPosition({W / 2.f, 44.f});
         m_body->addChild(line, 1);
     }
 
@@ -196,11 +196,11 @@ void StreakInfoPopup::buildPaired() {
 
     if (!pair->youSentToday) {
         if (auto item = textButton("I wrote today", this, menu_selector(StreakInfoPopup::onMarkSent), 0.65f)) {
-            item->setPosition({W / 2.f, 24.f});
+            item->setPosition({W / 2.f, 20.f});
             menu->addChild(item);
         }
     } else if (auto state = ui::label("Repeat tomorrow to keep it.", "chatFont.fnt", 0.4f, ui::COLOR_MUTED)) {
-        state->setPosition({W / 2.f, 24.f});
+        state->setPosition({W / 2.f, 20.f});
         m_body->addChild(state, 1);
     }
 }
@@ -210,12 +210,12 @@ void StreakInfoPopup::buildUnpaired() {
     if (flame) {
         flame->setStreak(0);
         flame->setDimmed(true);
-        flame->setPosition({56.f, 200.f});
+        flame->setPosition({56.f, 192.f});
         m_body->addChild(flame, 1);
     }
 
     if (auto title = ui::label("No streak yet", "bigFont.fnt", 0.7f, ui::COLOR_MUTED, {0.f, 0.5f})) {
-        title->setPosition({82.f, 200.f});
+        title->setPosition({82.f, 192.f});
         m_body->addChild(title, 1);
     }
 
