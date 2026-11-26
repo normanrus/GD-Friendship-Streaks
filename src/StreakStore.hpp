@@ -39,6 +39,18 @@ public:
     /// Called once the main menu exists: registers the account if needed and syncs.
     void onMenuOpened();
 
+    /// Drives background syncing while the game is open.
+    void onTick(float seconds);
+    /// A chat-like screen is visible: poll faster and sync right away.
+    void enterChat();
+    void leaveChat();
+
+    /// Asks for a sync soon; bursts collapse into a single request.
+    void requestRefresh(std::string const& reason = {});
+    /// Syncs unless the last successful one is younger than maxAge seconds.
+    void refreshIfStale(int maxAgeSeconds = 20);
+    int64_t lastSyncAt() const { return m_lastSyncAt; }
+
     void ensureAccount(std::function<void(bool)> callback = {});
     void refresh(std::function<void(bool)> callback = {});
 
@@ -59,6 +71,8 @@ public:
 private:
     /// Drops the cached identity when a different GD account is signed in.
     void dropStaleAccount();
+    /// Notices account switches while the game is running.
+    void checkSignedInAccount();
     void applyServerPairs(std::vector<PairState> const& fresh);
     void announce(PairState& pair, std::optional<PairState> const& previous);
     void enqueue(std::string const& pairId, std::string const& kind);
@@ -75,6 +89,16 @@ private:
     bool m_registering = false;
     std::string m_accountError;
     std::vector<std::function<void(bool)>> m_accountWaiters;
+    /// Set when a sync was asked for while another one was already running.
+    bool m_refreshQueued = false;
+    /// Number of chat screens currently open; polling runs faster while it is above zero.
+    int m_chatDepth = 0;
+    int64_t m_lastSyncAt = 0;
+    int64_t m_lastAttemptAt = 0;
+    int64_t m_lastRegisterAttemptAt = 0;
+    float m_pollAccum = 0.f;
+    float m_accountAccum = 0.f;
+    float m_flushAccum = 0.f;
 };
 
 } // namespace fstreak

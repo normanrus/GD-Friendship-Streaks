@@ -17,6 +17,10 @@ public:
     static void open(int friendAccountId, std::string friendName);
     /// Opens the card of the friend with the longest running streak.
     static bool openBest();
+    /// Rebuilds the card that is on screen, if any, after the mirror changed.
+    static void refreshOpen();
+
+    void onExit() override;
 
 protected:
     bool init(int friendAccountId, std::string friendName);

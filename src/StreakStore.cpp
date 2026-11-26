@@ -11,6 +11,10 @@ namespace fstreak {
 
 namespace {
 char const* kAccountKey = "account";
+
+int64_t nowSeconds() {
+    return static_cast<int64_t>(std::time(nullptr));
+}
 char const* kPairsKey = "pairs";
 char const* kPendingKey = "pending";
 } // namespace
@@ -80,7 +84,103 @@ void StreakStore::onMenuOpened() {
     ensureAccount([this](bool ok) {
         if (!ok) return;
         flushPending();
+        requestRefresh("menu");
+    });
+}
+
+void StreakStore::enterChat() {
+    ++m_chatDepth;
+    requestRefresh("chat-open");
+}
+
+void StreakStore::leaveChat() {
+    if (m_chatDepth > 0) --m_chatDepth;
+}
+
+void StreakStore::onTick(float seconds) {
+    load();
+    if (!configured()) return;
+
+    m_accountAccum += seconds;
+    if (m_accountAccum >= 2.f) {
+        m_accountAccum = 0.f;
+        checkSignedInAccount();
+    }
+
+    m_flushAccum += seconds;
+    if (m_flushAccum >= 20.f) {
+        m_flushAccum = 0.f;
+        if (m_account.valid()) flushPending();
+    }
+
+    // A request that arrived while another sync was running fires as soon as the
+    // minimum gap allows it, instead of waiting for the next poll.
+    if (m_refreshQueued && !m_refreshing && nowSeconds() - m_lastAttemptAt >= 3) {
+        m_refreshQueued = false;
+        m_lastAttemptAt = nowSeconds();
         refresh();
+        return;
+    }
+
+    // Chat screens change the moment the other player writes, so they poll faster.
+    float interval = m_chatDepth > 0 ? 6.f : 20.f;
+    m_pollAccum += seconds;
+    if (m_pollAccum >= interval) {
+        m_pollAccum = 0.f;
+        requestRefresh(m_chatDepth > 0 ? "chat-poll" : "poll");
+    }
+}
+
+void StreakStore::requestRefresh(std::string const& reason) {
+    load();
+    (void)reason;
+    if (!configured()) return;
+    if (!m_account.valid()) {
+        // Recover by itself: a registration that failed earlier can succeed now.
+        if (nowSeconds() - m_lastRegisterAttemptAt < 20) return;
+        ensureAccount([this](bool ok) {
+            if (!ok) return;
+            flushPending();
+            requestRefresh("after-register");
+        });
+        return;
+    }
+
+    if (m_refreshing) {
+        m_refreshQueued = true;
+        return;
+    }
+    // Collapse bursts (open chat + open card + send + receive) into one request.
+    if (nowSeconds() - m_lastAttemptAt < 3) {
+        m_refreshQueued = true;
+        return;
+    }
+
+    m_lastAttemptAt = nowSeconds();
+    refresh();
+}
+
+void StreakStore::refreshIfStale(int maxAgeSeconds) {
+    if (m_lastSyncAt > 0 && nowSeconds() - m_lastSyncAt < maxAgeSeconds) return;
+    requestRefresh("stale");
+}
+
+void StreakStore::checkSignedInAccount() {
+    int signedIn = signedInAccountId();
+    if (signedIn <= 0) return;
+    if (m_account.valid() && m_account.accountId == signedIn) return;
+    if (m_registering) return;
+    if (nowSeconds() - m_lastRegisterAttemptAt < 20) return;
+
+    // Another GD account is signed in: the token, the pairs and the queued events
+    // all belong to the previous account and must not be shown for this one.
+    if (m_account.valid()) {
+        dropStaleAccount();
+    }
+    ensureAccount([this](bool ok) {
+        if (!ok) return;
+        flushPending();
+        requestRefresh("account-switch");
     });
 }
 
@@ -132,6 +232,7 @@ void StreakStore::ensureAccount(std::function<void(bool)> callback) {
     }
 
     m_registering = true;
+    m_lastRegisterAttemptAt = nowSeconds();
     m_accountError.clear();
     auto username = signedInUsername();
     StreakApi::registerAccount(
@@ -163,18 +264,24 @@ void StreakStore::refresh(std::function<void(bool)> callback) {
         return;
     }
     if (m_refreshing) {
+        m_refreshQueued = true;
         if (callback) callback(false);
         return;
     }
     m_refreshing = true;
+    m_lastAttemptAt = nowSeconds();
 
     StreakApi::listPairs(m_account, [this, callback](ApiResult result) {
         m_refreshing = false;
         if (!result.ok) {
             if (result.error == "bad_token") {
-                // The server rotated or lost our token: register again on next sync.
+                // The server rotated or lost our token: register again straight away.
                 m_account.token.clear();
                 save();
+                m_lastRegisterAttemptAt = 0;
+                ensureAccount([this](bool ok) {
+                    if (ok) requestRefresh("re-register");
+                });
             }
             if (callback) callback(false);
             return;
@@ -187,6 +294,8 @@ void StreakStore::refresh(std::function<void(bool)> callback) {
                 }
             }
         }
+        m_lastSyncAt = nowSeconds();
+        m_refreshQueued = false;
         applyServerPairs(fresh);
         if (callback) callback(true);
     });
@@ -194,6 +303,10 @@ void StreakStore::refresh(std::function<void(bool)> callback) {
 
 void StreakStore::applyServerPairs(std::vector<PairState> const& fresh) {
     std::vector<PairState> merged;
+    // Polling every few seconds must not repaint the UI or rewrite save data when
+    // nothing actually moved, so the comparison decides both.
+    bool changed = fresh.size() != m_pairs.size();
+
     for (auto incoming : fresh) {
         std::optional<PairState> previous;
         for (auto const& cached : m_pairs) {
@@ -205,12 +318,25 @@ void StreakStore::applyServerPairs(std::vector<PairState> const& fresh) {
         if (previous) {
             incoming.announcedCurrent = previous->announcedCurrent;
             incoming.remindedDay = previous->remindedDay;
+            if (
+                previous->current != incoming.current || previous->best != incoming.best ||
+                previous->startDay != incoming.startDay || previous->lastStreakDay != incoming.lastStreakDay ||
+                previous->todayDay != incoming.todayDay || previous->youSentToday != incoming.youSentToday ||
+                previous->friendSentToday != incoming.friendSentToday || previous->mutualToday != incoming.mutualToday
+            ) {
+                changed = true;
+            }
+        } else {
+            changed = true;
         }
         incoming.fetchedAt = static_cast<int64_t>(std::time(nullptr));
         announce(incoming, previous);
         merged.push_back(std::move(incoming));
     }
+
     m_pairs = std::move(merged);
+    if (!changed) return;
+
     save();
     notifyListeners();
 }

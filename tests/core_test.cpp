@@ -78,6 +78,19 @@ int main() {
     check(milestoneMessage(7) == "One week of daily messages!", "milestone message 7");
     check(milestoneMessage(15) == "15 days in a row!", "generic milestone message");
 
-    std::cout << "All friendship streak core tests passed.\n";
+    
+    // Flame colour stages: 1-24 orange, 25-49 blue, 50-99 purple, 100+ gold.
+    check(flameStage(0) == FlameStage::Dead, "0 days is no flame");
+    check(flameStage(1) == FlameStage::Orange, "1 day is orange");
+    check(flameStage(24) == FlameStage::Orange, "24 days is still orange");
+    check(flameStage(25) == FlameStage::Blue, "25 days turns blue");
+    check(flameStage(49) == FlameStage::Blue, "49 days is still blue");
+    check(flameStage(50) == FlameStage::Purple, "50 days turns purple");
+    check(flameStage(99) == FlameStage::Purple, "99 days is still purple");
+    check(flameStage(100) == FlameStage::Gold, "100 days turns gold");
+    check(flameStage(1234) == FlameStage::Gold, "gold stays gold");
+    check(std::string(flameStageName(FlameStage::Blue)) == "Blue", "stage name");
+
+std::cout << "All friendship streak core tests passed.\n";
     return 0;
 }

@@ -1,32 +1,41 @@
 # Friendship Streaks
 
+<img src="logo.png" alt="Friendship Streaks" width="96" align="right">
+
 Daily streaks, but with your friends: pair up with someone and every day you both write each other a message keeps the shared flame alive.
 
 ## The idea
 
 TikTok style streaks work because two people are in it together. This mod brings that to Geometry Dash: the streak belongs to the pair, not to you, so it only grows on the days where both of you showed up. Miss a whole day and it starts over, while your best streak stays on record.
 
-## In the main menu
+## In your chats
 
-A small flame sits above your profile button with your best active streak next to it. Click it to open the streaks window.
+The streak lives where the messages are, so there is no second inbox to learn.
 
-## Streaks window
+- In the chat list, every friend with a running streak gets a small flame and the day count right after their name. Friends without a streak keep the row exactly as the game draws it.
+- In an open chat, the same flame sits on the title line, lined up with the game's own header buttons, and it never runs under a long name.
+- Tap it and a compact card opens: current streak, best streak, the date the streak started, the last day you both wrote, the last seven days, what is still missing today, and the code exchange that starts a new streak.
 
-- Every paired friend with their current streak, best streak and today's state
-- A link button that gives you a 6 character code to hand to a friend
-- A sync button, so you can pull the latest state before you write
+## Flame colours
 
-## Friend detail
+The flame changes colour as the streak grows, and because both players derive it from the same day count it is always the same on both screens:
 
-- Current streak and best streak
-- The date your current streak started
-- The date of the last day you both wrote
-- A 14 day calendar, with a golden ring on today and a clear difference between "both wrote", "only you wrote" and "only they wrote"
-- A flame visualisation of the current run, so a long streak actually looks long
+| Days | Colour |
+|---|---|
+| 1 to 24 | Orange |
+| 25 to 49 | Blue |
+| 50 to 99 | Purple |
+| 100 and more | Gold |
+
+The switch to a new stage plays a short flare, so a milestone is visible without a popup.
 
 ## Flames everywhere
 
-Paired friends get a flame next to their name in the friends list, in the message list, and on their profile page, so you always know who is waiting for a reply.
+Paired friends also get a flame next to their name in the friends list, in the message list and on their profile page, so you always know who is waiting for a reply.
+
+## Keeping both accounts in step
+
+The game stays open for hours, so the mod polls on its own: every 6 seconds while a chat is on screen and every 20 seconds in the menus. Opening a chat, sending a message, receiving one, or switching GD accounts triggers a sync immediately. Identical answers do not repaint the UI or rewrite the save file.
 
 ## Notifications
 
@@ -34,4 +43,4 @@ Streak growth, streak loss and "your friend is waiting" reminders, plus special 
 
 ## What it needs
 
-A Geometry Dash account and a small sync server, since both players have to agree on the same days. `server/server.py` in the repository is a complete one file server with no dependencies. Without a connection the mod still shows the last synced state, including the calendar and the badge.
+A Geometry Dash account and a small sync server, since both players have to agree on the same days. `server/server.py` in the repository is a complete one file server with no dependencies. Without a connection the mod still shows the last synced state, including the calendar and the flame colours.

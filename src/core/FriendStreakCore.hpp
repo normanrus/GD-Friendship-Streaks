@@ -176,6 +176,34 @@ inline char const* todayStatusText(TodayStatus status) {
     }
 }
 
+/// Colour stage of a streak. Both players derive it from the same day count, so it
+/// needs no syncing of its own and survives a restart with the streak itself.
+enum class FlameStage {
+    Dead,
+    Orange,
+    Blue,
+    Purple,
+    Gold,
+};
+
+inline FlameStage flameStage(int streak) {
+    if (streak <= 0) return FlameStage::Dead;
+    if (streak >= 100) return FlameStage::Gold;
+    if (streak >= 50) return FlameStage::Purple;
+    if (streak >= 25) return FlameStage::Blue;
+    return FlameStage::Orange;
+}
+
+inline char const* flameStageName(FlameStage stage) {
+    switch (stage) {
+        case FlameStage::Blue: return "Blue";
+        case FlameStage::Purple: return "Purple";
+        case FlameStage::Gold: return "Gold";
+        case FlameStage::Orange: return "Orange";
+        default: return "Dead";
+    }
+}
+
 /// Milestone announcements, kept here so the text stays consistent everywhere.
 inline std::string milestoneMessage(int streak) {
     switch (streak) {

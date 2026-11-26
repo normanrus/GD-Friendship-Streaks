@@ -7,6 +7,10 @@
 
 #include <algorithm>
 #include <cctype>
+#include <ctime>
+#include <functional>
+#include <string>
+#include <vector>
 
 #include "Platform.hpp"
 
@@ -26,6 +30,7 @@
 #include <Geode/modify/ProfilePage.hpp>
 #if FSTREAK_HAS_THREADS
 #include <Geode/modify/GJThreadCell.hpp>
+#include <Geode/modify/MessageThreadsPage.hpp>
 #include <Geode/modify/ThreadViewPopup.hpp>
 #else
 #include <Geode/modify/GJMessagePopup.hpp>
@@ -34,7 +39,6 @@
 #include "Notify.hpp"
 #include "StreakStore.hpp"
 #include "ui/FlameNode.hpp"
-#include "ui/StreakBadge.hpp"
 #include "ui/StreakInfoPopup.hpp"
 #include "ui/Ui.hpp"
 
@@ -44,41 +48,39 @@ namespace {
 
 constexpr int kFlameTag = 0x5354524B; // "STRK"
 
+// Redraw callbacks of the chat surfaces that are on screen right now. Keeping the
+// callbacks instead of the node pointers means a screen that has been closed can
+// never be touched.
+std::function<void()> g_refreshChat;
+std::function<void()> g_refreshThreadList;
+
 template <class Str>
 std::string toStdString(Str const& value) {
     return std::string(value.c_str());
 }
 
-/// Finds the label that shows the player name so decorations can sit next to it.
-CCLabelBMFont* findNameLabel(cocos2d::CCNode* root, std::string const& name) {
-    if (!root || name.empty()) return nullptr;
-    if (auto children = root->getChildren()) {
-        for (auto child : CCArrayExt<CCNode*>(children)) {
-            if (auto label = typeinfo_cast<CCLabelBMFont*>(child)) {
-                if (name == label->getString()) return label;
-            }
-            if (auto nested = findNameLabel(child, name)) return nested;
-        }
-    }
-    return nullptr;
+std::string lowercased(std::string text) {
+    std::transform(text.begin(), text.end(), text.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    return text;
 }
 
-/// Same, but tolerant: chats may decorate or shorten the name in the row.
-CCLabelBMFont* findLabelContaining(cocos2d::CCNode* root, std::string const& needle) {
-    if (!root || needle.empty()) return nullptr;
-    std::string wanted = needle;
-    std::transform(wanted.begin(), wanted.end(), wanted.begin(), [](unsigned char c) { return std::tolower(c); });
+bool textMatches(std::string const& text, std::string const& name) {
+    auto haystack = lowercased(text);
+    auto needle = lowercased(name);
+    if (needle.empty() || haystack.empty()) return false;
+    return haystack == needle || haystack.find(needle) != std::string::npos;
+}
+
+void collectLabels(cocos2d::CCNode* root, std::vector<CCLabelBMFont*>& out) {
+    if (!root) return;
     if (auto children = root->getChildren()) {
-        for (auto child : CCArrayExt<CCNode*>(children)) {
-            if (auto label = typeinfo_cast<CCLabelBMFont*>(child)) {
-                std::string text = label->getString();
-                std::transform(text.begin(), text.end(), text.begin(), [](unsigned char c) { return std::tolower(c); });
-                if (!text.empty() && text.find(wanted) != std::string::npos) return label;
-            }
-            if (auto nested = findLabelContaining(child, needle)) return nested;
+        for (auto child : CCArrayExt<cocos2d::CCNode*>(children)) {
+            if (auto label = typeinfo_cast<CCLabelBMFont*>(child)) out.push_back(label);
+            collectLabels(child, out);
         }
     }
-    return nullptr;
 }
 
 /// Removes a decoration wherever a reused cell or a re-laid-out popup left it.
@@ -95,69 +97,262 @@ void removeDecoration(cocos2d::CCNode* root, int tag) {
     }
 }
 
-void replaceFlame(cocos2d::CCNode* host, fstreak::PairState const& pair, cocos2d::CCPoint fallback) {
-    if (auto old = host->getChildByTag(kFlameTag)) old->removeFromParent();
+/// Bounding box of a node in world space, so nodes from different parents compare.
+[[maybe_unused]] cocos2d::CCRect worldBox(cocos2d::CCNode* node) {
+    auto box = node->boundingBox();
+    if (auto parent = node->getParent()) {
+        auto low = parent->convertToWorldSpace({box.getMinX(), box.getMinY()});
+        auto high = parent->convertToWorldSpace({box.getMaxX(), box.getMaxY()});
+        return cocos2d::CCRect(low.x, low.y, high.x - low.x, high.y - low.y);
+    }
+    return box;
+}
 
-    auto flame = fstreak::FlameNode::create(20.f, true);
+bool usesChatFont(CCLabelBMFont* label) {
+    if (!label) return false;
+    return std::string(label->m_sFntFile.c_str()).find("chatFont") != std::string::npos;
+}
+
+#if FSTREAK_HAS_THREADS
+/// The chat row draws its preview and timestamp with chatFont.fnt, so the label
+/// that carries the friend name is the other one that matches the thread.
+CCLabelBMFont* threadNameLabel(cocos2d::CCNode* cell, std::string const& name) {
+    std::vector<CCLabelBMFont*> labels;
+    collectLabels(cell, labels);
+
+    bool hasName = !name.empty();
+    CCLabelBMFont* best = nullptr;
+    float bestY = -1e9f;
+    CCLabelBMFont* fallback = nullptr;
+
+    for (auto label : labels) {
+        if (usesChatFont(label)) {
+            // The preview and the timestamp: never a good place for the flame.
+            if (hasName && !fallback && textMatches(toStdString(label->getString()), name)) {
+                fallback = label;
+            }
+            continue;
+        }
+        if (hasName && !textMatches(toStdString(label->getString()), name)) continue;
+        if (label->getPositionY() > bestY) {
+            bestY = label->getPositionY();
+            best = label;
+        }
+    }
+    // Some threads carry the name on the other member instead of m_userName; the
+    // top text of the row is the friend's name in that case.
+    return best ? best : fallback;
+}
+
+/// Left edge of everything that must stay readable on the right of a row.
+float rowRightLimit(GJThreadCell* cell, cocos2d::CCNode* host) {
+    float limit = host->convertToNodeSpace(
+        cell->convertToWorldSpace({cell->getContentSize().width - 12.f, 0.f})
+    ).x;
+
+    std::vector<CCLabelBMFont*> labels;
+    collectLabels(cell, labels);
+    for (auto label : labels) {
+        if (!usesChatFont(label)) continue;
+        auto box = worldBox(label);
+        float left = host->convertToNodeSpace({box.getMinX(), box.getMidY()}).x;
+        limit = std::min(limit, left - 4.f);
+    }
+
+    auto children = cell->getChildren();
+    if (!children) return limit;
+    for (auto child : CCArrayExt<cocos2d::CCNode*>(children)) {
+        auto sprite = typeinfo_cast<cocos2d::CCSprite*>(child);
+        if (!sprite) continue;
+        // The unread bubble and the muted/star marks also live on the right side.
+        auto box = worldBox(sprite);
+        if (box.getMinX() < cell->convertToWorldSpace({cell->getContentSize().width * 0.55f, 0.f}).x) {
+            continue;
+        }
+        float left = host->convertToNodeSpace({box.getMinX(), box.getMidY()}).x;
+        limit = std::min(limit, left - 4.f);
+    }
+    return limit;
+}
+
+/// Flame and day count next to the friend name in a chat list row.
+void decorateThreadCell(GJThreadCell* cell) {
+    if (!cell) return;
+    removeDecoration(cell, kFlameTag);
+
+    auto thread = cell->m_thread;
+    if (!thread || !thread->m_isDM || thread->m_accountID <= 0) return;
+    if (!Mod::get()->getSettingValue<bool>("show-flame-in-friends")) return;
+
+    auto pair = fstreak::StreakStore::get().pairForFriend(thread->m_accountID);
+    // No active streak, no indicator: the row stays exactly as vanilla draws it.
+    if (!pair || pair->current <= 0) return;
+
+    auto label = threadNameLabel(cell, toStdString(thread->m_userName));
+    if (!label || !label->getParent()) return;
+
+    auto host = label->getParent();
+    auto box = label->boundingBox();
+
+    constexpr float SIZE = 15.f;
+    float half = SIZE * 0.5f;
+    float x = box.getMaxX() + 6.f + half;
+    float limit = rowRightLimit(cell, host);
+    if (x + half > limit) return;
+
+    auto flame = fstreak::FlameNode::create(SIZE, true);
     if (!flame) return;
     flame->setTag(kFlameTag);
-    flame->setStreak(pair.current);
-    flame->setDimmed(pair.current == 0);
-    flame->setPosition(fallback);
+    flame->setStreak(pair->current);
+    flame->setPosition({x, box.getMidY()});
     host->addChild(flame, 20);
 }
 
-} // namespace
+/// Flame next to the name in the open chat, on the same line as the game's own
+/// header buttons. Tapping it opens the streak card.
+void placeChatChip(ThreadViewPopup* popup, CCObject* target, SEL_MenuHandler handler) {
+    if (!popup) return;
+    removeDecoration(popup, kFlameTag);
 
-class $modify(FriendshipStreakMenuLayer, MenuLayer) {
-    struct Fields {
-        fstreak::StreakBadge* badge = nullptr;
-        int listenerId = 0;
-        geode::ListenerHandle* showBadgeHandle = nullptr;
-        geode::ListenerHandle* showCounterHandle = nullptr;
-    };
+    auto thread = popup->m_thread;
+    auto host = popup->m_mainLayer;
+    if (!thread || !thread->m_isDM || !host || !popup->m_titleLabel) return;
+    if (!Mod::get()->getSettingValue<bool>("show-flame-in-friends")) return;
+    if (!popup->m_titleLabel->getParent()) return;
 
+    // The header row is the line the game puts its own top-right buttons on, so it
+    // is the only vertical anchor that cannot drift from the title.
+    auto titleBox = worldBox(popup->m_titleLabel);
+    float headerY = host->convertToNodeSpace({titleBox.getMidX(), titleBox.getMidY()}).y;
+    bool rowKnown = false;
+    if (popup->m_buttonMenu && popup->m_buttonMenu->getChildrenCount() > 0) {
+        if (auto first = popup->m_buttonMenu->getChildren()->objectAtIndex(0)) {
+            auto item = static_cast<cocos2d::CCNode*>(first);
+            auto world = popup->m_buttonMenu->convertToWorldSpace(item->getPosition());
+            headerY = host->convertToNodeSpace(world).y;
+            rowKnown = true;
+        }
+    }
+    (void)rowKnown;
+
+    float nameRight = host->convertToNodeSpace({titleBox.getMaxX(), titleBox.getMidY()}).x;
+    for (cocos2d::CCNode* extra : {static_cast<cocos2d::CCNode*>(popup->m_roleBadge),
+                                   static_cast<cocos2d::CCNode*>(popup->m_titleEmote)}) {
+        if (!extra) continue;
+        auto box = worldBox(extra);
+        nameRight = std::max(nameRight, host->convertToNodeSpace({box.getMaxX(), box.getMidY()}).x);
+    }
+
+    float limit = 1e9f;
+    if (auto menu = popup->m_buttonMenu) {
+        if (auto children = menu->getChildren()) {
+            for (auto child : CCArrayExt<cocos2d::CCNode*>(children)) {
+                auto box = worldBox(child);
+                float left = host->convertToNodeSpace({box.getMinX(), box.getMidY()}).x;
+                limit = std::min(limit, left - 4.f);
+            }
+        }
+    }
+    if (popup->m_membersButton) {
+        auto box = worldBox(popup->m_membersButton);
+        float left = host->convertToNodeSpace({box.getMinX(), box.getMidY()}).x;
+        if (left > nameRight) limit = std::min(limit, left - 4.f);
+    }
+    if (limit > 1e8f) limit = host->getContentSize().width - 10.f;
+
+    constexpr float SIZE = 18.f;
+    float half = SIZE * 0.5f;
+    float x = nameRight + 7.f + half;
+    if (x + half > limit) {
+        float squeezed = limit - half;
+        if (squeezed - half < nameRight + 2.f) return; // no room: leave the header alone
+        x = squeezed;
+    }
+
+    auto pair = fstreak::StreakStore::get().pairForFriend(thread->m_accountID);
+
+    auto flame = fstreak::FlameNode::create(SIZE, true);
+    if (!flame) return;
+    if (pair) {
+        flame->setStreak(pair->current);
+    } else {
+        flame->setStreak(0);
+        flame->setDimmed(true);
+    }
+
+    auto item = CCMenuItemSpriteExtra::create(flame, target, handler);
+    if (!item) return;
+
+    auto menu = cocos2d::CCMenu::create();
+    menu->setPosition({x, headerY});
+    menu->addChild(item);
+    menu->setTag(kFlameTag);
+    host->addChild(menu, 20);
+}
+#endif // FSTREAK_HAS_THREADS
+
+/// Keeps the visible streak decorations in step with the mirror.
+void refreshStreakSurfaces() {
+    // Rebuilding the rows re-runs loadFromThread, which redecorates every cell.
+    if (g_refreshThreadList) g_refreshThreadList();
+    if (g_refreshChat) g_refreshChat();
+    fstreak::StreakInfoPopup::refreshOpen();
+}
+
+/// One second heartbeat that drives background syncing.
+class StreakTicker : public cocos2d::CCNode {
+public:
+    static StreakTicker* get() {
+        static StreakTicker* instance = nullptr;
+        if (!instance) {
+            instance = new StreakTicker();
+            if (!instance->init()) {
+                delete instance;
+                return nullptr;
+            }
+            instance->retain();
+        }
+        return instance;
+    }
+
+    /// Re-attaches after a scene change; safe to call from any screen hook.
+    void attach() {
+        auto director = cocos2d::CCDirector::get();
+        auto scene = director ? director->getRunningScene() : nullptr;
+        if (!scene || this->getParent() == scene) return;
+        this->removeFromParentAndCleanup(false);
+        scene->addChild(this, 999);
+    }
+
+private:
     bool init() {
-        if (!MenuLayer::init()) return false;
-
-        auto& store = fstreak::StreakStore::get();
-        store.load();
-
-        this->addBadge();
-
-        m_fields->listenerId = store.addListener([this] {
-            if (m_fields->badge) m_fields->badge->updateFromStore();
-        });
-
-        m_fields->showBadgeHandle = listenForSettingChanges<bool>("show-badge", [this](bool value) {
-            if (m_fields->badge) m_fields->badge->setVisible(value);
-        });
-        m_fields->showCounterHandle = listenForSettingChanges<bool>("show-counter", [this](bool) {
-            if (m_fields->badge) m_fields->badge->updateFromStore();
-        });
-
-        store.onMenuOpened();
+        if (!CCNode::init()) return false;
+        this->setID("friendship-streak-ticker"_spr);
+        this->schedule(schedule_selector(StreakTicker::tick), 1.f);
         return true;
     }
 
-    void addBadge() {
-        if (!Mod::get()->getSettingValue<bool>("show-badge")) return;
+    void tick(float dt) {
+        fstreak::StreakStore::get().onTick(dt);
+    }
+};
 
-        auto badge = fstreak::StreakBadge::create();
-        if (!badge) return;
-        badge->setID("friendship-streak-badge"_spr);
-        m_fields->badge = badge;
+} // namespace
 
-        // Sit just above the profile button so the flame reads as "your streak".
-        CCPoint position = {56.f, 96.f};
-        if (m_profileButton && m_profileButton->getParent()) {
-            auto world = m_profileButton->getParent()->convertToWorldSpace(m_profileButton->getPosition());
-            position = this->convertToNodeSpace(world);
-            position.x += 2.f;
-            position.y += 54.f;
-        }
-        badge->setPosition(position);
-        this->addChild(badge, 100);
+$on_mod(Loaded) {
+    // One listener for every surface: the chat rows, the open chat and the card.
+    fstreak::StreakStore::get().addListener([] {
+        refreshStreakSurfaces();
+    });
+}
+
+class $modify(FriendshipStreakMenuLayer, MenuLayer) {
+    bool init() {
+        if (!MenuLayer::init()) return false;
+
+        if (auto ticker = StreakTicker::get()) ticker->attach();
+        fstreak::StreakStore::get().onMenuOpened();
+        return true;
     }
 };
 
@@ -167,23 +362,36 @@ class $modify(FriendshipStreakUserCell, FSTREAK_USER_CELL) {
         FSTREAK_USER_CELL::loadFromScore(score);
         if (!score) return;
 
-        if (auto old = this->getChildByTag(kFlameTag)) old->removeFromParent();
+        removeDecoration(this, kFlameTag);
         if (!Mod::get()->getSettingValue<bool>("show-flame-in-friends")) return;
 
-        auto& store = fstreak::StreakStore::get();
-        store.load();
-        auto pair = store.pairForFriend(score->m_accountID);
-        if (!pair) return;
+        auto pair = fstreak::StreakStore::get().pairForFriend(score->m_accountID);
+        if (!pair || pair->current <= 0) return;
 
         auto name = toStdString(score->m_userName);
-        CCPoint position = {this->getContentSize().width - 56.f, this->getContentSize().height / 2.f};
-        if (auto label = findNameLabel(this, name)) {
+        cocos2d::CCPoint position = {this->getContentSize().width - 56.f, this->getContentSize().height / 2.f};
+        auto label = [&]() -> CCLabelBMFont* {
+            std::vector<CCLabelBMFont*> labels;
+            collectLabels(this, labels);
+            for (auto candidate : labels) {
+                if (textMatches(toStdString(candidate->getString()), name) && !usesChatFont(candidate)) {
+                    return candidate;
+                }
+            }
+            return nullptr;
+        }();
+        if (label) {
             position.setPoint(
                 label->getPositionX() + label->getContentSize().width * label->getScaleX() * 0.5f + 18.f,
                 label->getPositionY()
             );
         }
-        replaceFlame(this, *pair, position);
+        auto flame = fstreak::FlameNode::create(20.f, true);
+        if (!flame) return;
+        flame->setTag(kFlameTag);
+        flame->setStreak(pair->current);
+        flame->setPosition(position);
+        this->addChild(flame, 20);
     }
 };
 #endif
@@ -193,16 +401,18 @@ class $modify(FriendshipStreakMessageCell, GJMessageCell) {
         GJMessageCell::loadFromMessage(message);
         if (!message) return;
 
-        if (auto old = this->getChildByTag(kFlameTag)) old->removeFromParent();
+        removeDecoration(this, kFlameTag);
         if (!Mod::get()->getSettingValue<bool>("show-flame-in-friends")) return;
 
-        auto& store = fstreak::StreakStore::get();
-        store.load();
-        auto pair = store.pairForFriend(message->m_accountID);
-        if (!pair) return;
+        auto pair = fstreak::StreakStore::get().pairForFriend(message->m_accountID);
+        if (!pair || pair->current <= 0) return;
 
-        CCPoint position = {this->getContentSize().width - 46.f, this->getContentSize().height - 16.f};
-        replaceFlame(this, *pair, position);
+        auto flame = fstreak::FlameNode::create(20.f, true);
+        if (!flame) return;
+        flame->setTag(kFlameTag);
+        flame->setStreak(pair->current);
+        flame->setPosition({this->getContentSize().width - 46.f, this->getContentSize().height - 16.f});
+        this->addChild(flame, 20);
     }
 };
 
@@ -211,16 +421,22 @@ class $modify(FriendshipStreakProfilePage, ProfilePage) {
         ProfilePage::loadPageFromUserInfo(score);
         if (!score) return;
 
-        if (auto old = this->getChildByTag(kFlameTag)) old->removeFromParent();
+        removeDecoration(this, kFlameTag);
         if (!Mod::get()->getSettingValue<bool>("show-flame-in-friends")) return;
 
-        auto& store = fstreak::StreakStore::get();
-        store.load();
-        auto pair = store.pairForFriend(score->m_accountID);
-        if (!pair) return;
+        auto pair = fstreak::StreakStore::get().pairForFriend(score->m_accountID);
+        if (!pair || pair->current <= 0) return;
 
         auto name = toStdString(score->m_userName);
-        auto label = findNameLabel(this, name);
+        CCLabelBMFont* label = nullptr;
+        std::vector<CCLabelBMFont*> labels;
+        collectLabels(this, labels);
+        for (auto candidate : labels) {
+            if (textMatches(toStdString(candidate->getString()), name) && !usesChatFont(candidate)) {
+                label = candidate;
+                break;
+            }
+        }
         if (!label || !label->getParent()) return;
 
         auto line = CCLabelBMFont::create(
@@ -229,7 +445,7 @@ class $modify(FriendshipStreakProfilePage, ProfilePage) {
         if (!line) return;
         line->setTag(kFlameTag);
         line->setScale(0.42f);
-        line->setColor(pair->current > 0 ? fstreak::ui::COLOR_GOLD : fstreak::ui::COLOR_MUTED);
+        line->setColor(fstreak::FlameNode::stageColor(pair->current));
         line->setAnchorPoint({0.f, 0.5f});
         line->setPosition({label->getPositionX(), label->getPositionY() - 20.f});
         label->getParent()->addChild(line, 20);
@@ -237,45 +453,71 @@ class $modify(FriendshipStreakProfilePage, ProfilePage) {
 };
 
 #if FSTREAK_HAS_THREADS
-/// Flame next to the friend name in a chat list row.
 class $modify(FriendshipStreakThreadCell, GJThreadCell) {
     void loadFromThread(GJMessageThread* thread) {
         GJThreadCell::loadFromThread(thread);
-        removeDecoration(this, kFlameTag);
-        if (!thread || !thread->m_isDM || thread->m_accountID <= 0) return;
-        if (!Mod::get()->getSettingValue<bool>("show-flame-in-friends")) return;
-
-        auto& store = fstreak::StreakStore::get();
-        store.load();
-        auto pair = store.pairForFriend(thread->m_accountID);
-        if (!pair) return;
-
-        auto name = toStdString(thread->m_userName);
-        auto label = findNameLabel(this, name);
-        if (!label) label = findLabelContaining(this, name);
-        if (!label || !label->getParent()) return;
-
-        constexpr float SIZE = 15.f;
-        auto box = label->boundingBox();
-        float x = box.getMaxX() + 8.f + SIZE * 0.5f;
-        // The right side of the row keeps its timestamp and unread badge.
-        if (x + SIZE > this->getContentSize().width - 96.f) return;
-
-        auto flame = fstreak::FlameNode::create(SIZE, true);
-        if (!flame) return;
-        flame->setTag(kFlameTag);
-        flame->setStreak(pair->current);
-        flame->setPosition({x, box.getMidY()});
-        label->getParent()->addChild(flame, 20);
+        decorateThreadCell(this);
     }
 };
 
-/// Flame next to the title of an open chat; tapping it opens the streak card.
+/// Chat list page: keeps the streak mirror fresh while it is open.
+class $modify(FriendshipStreakThreadsPage, MessageThreadsPage) {
+    bool init() {
+        if (!MessageThreadsPage::init()) return false;
+
+        g_refreshThreadList = [this] {
+            if (m_threadListView) m_threadListView->reloadAll();
+        };
+
+        auto& store = fstreak::StreakStore::get();
+        store.enterChat();
+        store.requestRefresh("threads-open");
+        return true;
+    }
+
+    void onExit() {
+        g_refreshThreadList = nullptr;
+        fstreak::StreakStore::get().leaveChat();
+        MessageThreadsPage::onExit();
+    }
+
+    void threadListFinished(cocos2d::CCArray* threads, int page, int total, int unread) {
+        MessageThreadsPage::threadListFinished(threads, page, total, unread);
+        fstreak::StreakStore::get().requestRefresh("threads-loaded");
+    }
+
+    void threadUpdateFinished(int first, int last) {
+        MessageThreadsPage::threadUpdateFinished(first, last);
+        fstreak::StreakStore::get().requestRefresh("threads-update");
+    }
+
+    void onRefresh(cocos2d::CCObject* sender) {
+        MessageThreadsPage::onRefresh(sender);
+        fstreak::StreakStore::get().requestRefresh("threads-refresh");
+    }
+};
+
+/// Open chat: chip in the header, faster polling, and a sync whenever messages
+/// arrive or leave.
 class $modify(FriendshipStreakThreadView, ThreadViewPopup) {
     bool init(GJMessageThread* thread) {
         if (!ThreadViewPopup::init(thread)) return false;
+
+        g_refreshChat = [this] {
+            placeChatChip(this, this, menu_selector(FriendshipStreakThreadView::onChip));
+        };
+
+        auto& store = fstreak::StreakStore::get();
+        store.enterChat();
+
         this->placeChip();
         return true;
+    }
+
+    void onExit() {
+        g_refreshChat = nullptr;
+        fstreak::StreakStore::get().leaveChat();
+        ThreadViewPopup::onExit();
     }
 
     void layoutTitleRow() {
@@ -283,41 +525,41 @@ class $modify(FriendshipStreakThreadView, ThreadViewPopup) {
         this->placeChip();
     }
 
+    void threadMessagesFinished(int accountID, cocos2d::CCArray* messages, bool hasMore) {
+        ThreadViewPopup::threadMessagesFinished(accountID, messages, hasMore);
+
+        this->reportOwnMessage(messages);
+        fstreak::StreakStore::get().requestRefresh("messages");
+    }
+
+    void onRefresh(cocos2d::CCObject* sender) {
+        ThreadViewPopup::onRefresh(sender);
+        fstreak::StreakStore::get().requestRefresh("chat-refresh");
+    }
+
     void placeChip() {
-        removeDecoration(this, kFlameTag);
+        placeChatChip(this, this, menu_selector(FriendshipStreakThreadView::onChip));
+    }
 
+    /// Reports the first message we wrote today, which is what keeps the flame alive.
+    void reportOwnMessage(cocos2d::CCArray* messages) {
         auto thread = m_thread;
-        if (!thread || !thread->m_isDM || !m_titleLabel || !m_titleLabel->getParent()) return;
-        if (!Mod::get()->getSettingValue<bool>("show-flame-in-friends")) return;
-
-        auto host = m_titleLabel->getParent();
-        if (auto old = host->getChildByTag(kFlameTag)) old->removeFromParent();
+        if (!thread || !thread->m_isDM || !messages) return;
 
         auto& store = fstreak::StreakStore::get();
-        store.load();
-        auto pair = store.pairForFriend(thread->m_accountID);
 
-        constexpr float SIZE = 18.f;
-        auto flame = fstreak::FlameNode::create(SIZE, true);
-        if (!flame) return;
-        if (pair) {
-            flame->setStreak(pair->current);
-        } else {
-            flame->setStreak(0);
-            flame->setDimmed(true);
+        int self = fstreak::StreakStore::signedInAccountId();
+        if (self <= 0) return;
+
+        auto today = fstreak::utcDay(static_cast<int64_t>(std::time(nullptr)));
+        for (auto node : CCArrayExt<cocos2d::CCNode*>(messages)) {
+            auto message = static_cast<GJThreadMessage*>(node);
+            if (!message || message->m_deleted) continue;
+            if (message->m_accountID != self) continue;
+            if (fstreak::utcDay(message->m_timestamp) != today) continue;
+            store.reportMessageSent(thread->m_accountID);
+            return;
         }
-
-        auto item = CCMenuItemSpriteExtra::create(
-            flame, this, menu_selector(FriendshipStreakThreadView::onChip)
-        );
-        if (!item) return;
-
-        auto box = m_titleLabel->boundingBox();
-        auto menu = cocos2d::CCMenu::create();
-        menu->setPosition({box.getMaxX() + 6.f + SIZE * 0.5f, box.getMidY()});
-        menu->addChild(item);
-        menu->setTag(kFlameTag);
-        host->addChild(menu, 20);
     }
 
     void onChip(cocos2d::CCObject*) {
@@ -340,11 +582,13 @@ class $modify(FriendshipStreakMessagePopup, GJMessagePopup) {
         m_fields->friendId = message->m_accountID;
         m_fields->friendName = toStdString(message->m_username);
 
+        auto& store = fstreak::StreakStore::get();
+        store.enterChat();
+        store.requestRefresh("message-open");
+
         removeDecoration(this, kFlameTag);
         if (!Mod::get()->getSettingValue<bool>("show-flame-in-friends")) return true;
 
-        auto& store = fstreak::StreakStore::get();
-        store.load();
         auto pair = store.pairForFriend(message->m_accountID);
 
         auto flame = fstreak::FlameNode::create(18.f, true);
@@ -369,6 +613,16 @@ class $modify(FriendshipStreakMessagePopup, GJMessagePopup) {
         return true;
     }
 
+    void onExit() {
+        fstreak::StreakStore::get().leaveChat();
+        GJMessagePopup::onExit();
+    }
+
+    void downloadMessageFinished(GJUserMessage* message) {
+        GJMessagePopup::downloadMessageFinished(message);
+        fstreak::StreakStore::get().requestRefresh("message-downloaded");
+    }
+
     void onChip(cocos2d::CCObject*) {
         fstreak::StreakInfoPopup::open(m_fields->friendId, m_fields->friendName);
     }
@@ -380,7 +634,9 @@ class $modify(FriendshipStreakWriteMessage, GJWriteMessagePopup) {
     void uploadMessageFinished(int accountID) {
         GJWriteMessagePopup::uploadMessageFinished(accountID);
         // A delivered message is the daily interaction that keeps a streak alive.
-        fstreak::StreakStore::get().reportMessageSent(accountID);
+        auto& store = fstreak::StreakStore::get();
+        store.reportMessageSent(accountID);
+        store.requestRefresh("sent");
     }
 };
 #endif

@@ -1,5 +1,7 @@
 # Friendship Streaks
 
+<img src="logo.png" alt="Friendship Streaks" width="128" align="right">
+
 A Geode mod for Geometry Dash that adds TikTok style friendship streaks: pair up with a friend, and every day you both write each other a message keeps the shared flame alive.
 
 The streak is shared, so it only grows when **both** players show up. That is the whole point: the flame is a small daily reason to say hi.
@@ -8,8 +10,8 @@ The streak is shared, so it only grows when **both** players show up. That is th
 
 - **Flame in your chats.** GD 2.2091: the flame and its day count sit next to the friend name in the chat list rows and in the title row of an open chat. GD 2.2081: the flame sits in the open message window and in the message list.
 - **Streak card.** Tapping the flame opens a small card with the current streak, the best streak, the start date, the last mutual day, the last seven days as dots, and what is still missing today. It also holds the link flow, so there is no separate screen to learn.
-- **Flame badge in the main menu** with the best active streak, next to your profile button. Tapping it opens the card of that friend.
-- **Flames next to friends** in the friends list and on the profile page.
+- **Flames next to friends** in the friends list and on the profile page, and only for friends that actually have a running streak.
+- **Flame colours** that grow with the streak: orange up to 24 days, blue at 25, purple at 50, gold at 100. Both players see the same colour because it is derived from the same day count.
 - **Notifications** when a streak grows, when it breaks, when a friend is waiting for your reply, and special messages on days 7, 14, 30, 50 and 100.
 - **Settings** to hide the badge, hide the day counter, hide the flames in chats and friend lists, and turn notifications or milestone effects off.
 
@@ -59,7 +61,18 @@ Only one code per account is active at a time, a code cannot be used to link to 
 - The current streak is the number of consecutive counted days ending today, or ending yesterday if today is still pending. Writing today never loses a streak, it only keeps it.
 - Missing one or more whole days resets the current streak to 0. The best streak is stored forever.
 - Days are UTC days on the server, so both players see the same day no matter their timezone. The client shows the server's day, not the local one, which is what makes the streak honest across timezones.
-- Writing to a friend is detected when a GD message to that friend finishes uploading. Repeated messages on the same day do not count twice.
+- Writing to a friend is detected from the messages themselves: on GD 2.2091 the chat hands the loaded messages back after every send and refresh, on GD 2.2081 the message upload callback is used. Repeated messages on the same day do not count twice.
+
+## How fast the two accounts see each other
+
+The mod keeps a local mirror of the server state and refreshes it on its own:
+
+- every 6 seconds while a chat list or an open chat is on screen, every 20 seconds otherwise, so neither player has to restart the game to see a new day
+- immediately when a chat opens, when the chat page reloads, when messages arrive, and right after a message is reported
+- from the new messages themselves, so a message that lands while the chat is open is counted without closing it
+- bursts collapse into a single request (a hard 3 second floor), and identical answers do not rewrite save data or repaint the UI
+- a token the server no longer accepts triggers one re-registration instead of a silent stall
+- switching to another GD account drops the previous account's token, pairs and queued events before anything is shown
 
 ## Running the sync server
 
@@ -96,8 +109,7 @@ The mod keeps a local mirror of the last synced state, so the streak window, the
 | Setting | Default | Effect |
 |---|---|---|
 | Server URL | empty | Sync server base URL |
-| Show flame in main menu | on | Show or hide the badge |
-| Show day counter | on | Show or hide the number next to the flame |
+| Show day counter | on | Show or hide the number of days next to every flame |
 | Show flames next to friends | on | Show or hide the flames in chats, message lists and profiles |
 | Streak notifications | on | Turn streak notifications off |
 | Milestone effects | on | Turn the milestone flame burst off |

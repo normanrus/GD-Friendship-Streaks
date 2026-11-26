@@ -44,7 +44,19 @@ std::string linkErrorText(std::string const& error) {
     return fmt::format("Failed: {}", error);
 }
 
+/// The card that is currently on screen, so synced data can refresh it live.
+StreakInfoPopup* g_openCard = nullptr;
+
 } // namespace
+
+void StreakInfoPopup::refreshOpen() {
+    if (g_openCard) g_openCard->build();
+}
+
+void StreakInfoPopup::onExit() {
+    if (g_openCard == this) g_openCard = nullptr;
+    Popup::onExit();
+}
 
 void StreakInfoPopup::open(int friendAccountId, std::string friendName) {
     auto popup = new StreakInfoPopup();
@@ -75,6 +87,10 @@ bool StreakInfoPopup::init(int friendAccountId, std::string friendName) {
 
     this->setID("friendship-streak-info"_spr);
     this->setTitle("Friendship Streak");
+    // The chat behind this card is already dimmed by the game; a second full screen
+    // dim only turns the screen black.
+    this->setOpacity(0);
+    g_openCard = this;
 
     m_friendId = friendAccountId;
     m_friendName = std::move(friendName);
@@ -123,13 +139,17 @@ void StreakInfoPopup::buildPaired() {
     }
 
     auto count = ui::label(
-        fmt::format("{}", pair->current), "bigFont.fnt", 1.f, pair->current > 0 ? ui::COLOR_GOLD : ui::COLOR_MUTED, {0.f, 0.5f}
+        fmt::format("{}", pair->current), "bigFont.fnt", 1.f,
+        FlameNode::stageColor(pair->current), {0.f, 0.5f}
     );
     if (count) {
         count->setPosition({82.f, 192.f});
         m_body->addChild(count, 1);
 
-        auto unit = ui::label("day streak", "chatFont.fnt", 0.5f, ui::COLOR_MUTED, {0.f, 0.5f});
+        auto unitText = pair->current > 0
+            ? fmt::format("day streak - {} flame", flameStageName(flameStage(pair->current)))
+            : std::string("day streak");
+        auto unit = ui::label(unitText, "chatFont.fnt", 0.5f, ui::COLOR_MUTED, {0.f, 0.5f});
         if (unit) {
             unit->setPosition({82.f + count->getContentSize().width * count->getScaleX() + 8.f, 189.f});
             m_body->addChild(unit, 1);

@@ -1,3 +1,16 @@
+# v1.1.1
+
+Cleanup pass on the chat integration, plus faster syncing.
+
+- Removed the flame and day counter above the profile button in the main menu. The streak is opened from the chat it belongs to, and the badge no longer sits on top of your own avatar. The now useless "Show flame in main menu" setting is gone with it.
+- Chat list rows: the flame is found by the same rule the game uses to name its labels, it is placed only for friends with a running streak, and it never runs into the timestamp, the preview, the unread bubble or a long name. Rows that cannot fit it stay untouched.
+- Open chat: the flame now sits on the game's header line instead of under the name, measured from the header buttons and clamped before the first button.
+- No more extra dark layer behind the streak card: the game already dims the chat, so the card no longer dims the screen a second time.
+- Syncing no longer waits for a restart. The mod polls every 6 seconds while a chat is open and every 20 seconds otherwise, syncs on chat open, on new messages and right after a reported message, notices GD account switches while the game runs, re-registers once when a token is rejected, and collapses bursts into one request. Unchanged answers no longer rewrite save data or redraw the UI.
+- Flame colour stages: orange 1-24 days, blue 25-49, purple 50-99, gold 100+, with a short flare on the change. The same colour appears in the chat list, in the chat, on profiles and in the card.
+- `logo.png` moved from `resources/` to the repository root and referenced from the README and this page.
+- GD 2.2091 now detects "I wrote today" from the chat messages themselves, so it works on Windows, macOS and Android instead of only where the upload callback is bound.
+
 # v1.1.0
 
 The streak now lives in your chats instead of in a window of its own.
