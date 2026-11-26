@@ -1,9 +1,11 @@
 #include "StreakBadge.hpp"
 
-#include "FriendshipStreaksPopup.hpp"
+#include "StreakInfoPopup.hpp"
 #include "Ui.hpp"
 
+#include "../Notify.hpp"
 #include "../StreakStore.hpp"
+
 
 #include <algorithm>
 
@@ -39,12 +41,6 @@ StreakBadge* StreakBadge::create() {
 
 bool StreakBadge::init() {
     if (!CCNode::init()) return false;
-
-    m_pill = ui::panel(76.f, BADGE_HEIGHT, {255, 255, 255, 34});
-    if (m_pill) {
-        m_pill->setPosition({0.f, 0.f});
-        this->addChild(m_pill, 0);
-    }
 
     m_glow = CCSprite::create("glow.png"_spr);
     if (m_glow) {
@@ -119,7 +115,9 @@ void StreakBadge::celebrate() {
 }
 
 void StreakBadge::onOpen(CCObject*) {
-    FriendshipStreaksPopup::open();
+    if (!StreakInfoPopup::openBest()) {
+        notify::toast("Open a chat with a friend to start a streak", 2.f);
+    }
 }
 
 } // namespace fstreak

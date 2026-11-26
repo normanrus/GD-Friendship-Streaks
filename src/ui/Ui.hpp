@@ -1,8 +1,7 @@
 #pragma once
-// Small drawing helpers so the three popups share one visual language.
+// Small drawing helpers shared by the flame widgets and the streak card.
 
 #include <Geode/Geode.hpp>
-#include <Geode/ui/NineSlice.hpp>
 
 namespace fstreak::ui {
 
@@ -36,14 +35,6 @@ inline cocos2d::CCLabelBMFont* label(
     return label;
 }
 
-inline geode::NineSlice* panel(float width, float height, cocos2d::ccColor4B tint = {255, 255, 255, 255}) {
-    auto panel = geode::NineSlice::create("pill.png"_spr, {0.f, 0.f, width, height}, {18.f, 18.f, 18.f, 18.f});
-    if (!panel) return nullptr;
-    panel->setColor({tint.r, tint.g, tint.b});
-    panel->setOpacity(tint.a);
-    return panel;
-}
-
 inline void fadeIn(cocos2d::CCNode* node, float delay, float duration = 0.22f) {
     auto rgba = geode::cast::typeinfo_cast<cocos2d::CCNodeRGBA*>(node);
     if (!rgba) return;
@@ -56,29 +47,11 @@ inline void fadeIn(cocos2d::CCNode* node, float delay, float duration = 0.22f) {
 inline CCMenuItemSpriteExtra* button(
     std::string const& text, float scale, cocos2d::CCObject* target, cocos2d::SEL_MenuHandler handler
 ) {
-    // Drawn from the mod's own pill instead of a game sheet frame: a frame that is
-    // missing on the running GD version renders as the pink missing-texture square.
-    auto caption = label(text, "bigFont.fnt", 0.42f * scale, {255, 255, 255});
-    if (!caption) return nullptr;
-
-    float width = std::max(92.f, caption->getContentSize().width * 0.42f * scale + 32.f);
-    constexpr float height = 34.f;
-
-    cocos2d::CCNode* background = nullptr;
-    if (auto slice = geode::NineSlice::create("pill.png"_spr, {0.f, 0.f, width, height}, {14.f, 14.f, 14.f, 14.f})) {
-        slice->setColor({96, 152, 232});
-        background = slice;
-    } else if (auto solid = rect(width, height, {96, 152, 232, 255})) {
-        background = solid;
-    }
-    if (!background) return nullptr;
-
-    caption->setPosition({width / 2.f, height / 2.f - 1.f});
-    background->addChild(caption);
-
-    auto item = CCMenuItemSpriteExtra::create(background, target, handler);
-    item->setScale(scale);
-    return item;
+    // GD's own ButtonSprite draws with the game's sheet and font, so a version that
+    // moved a sprite frame cannot turn the button into a missing-texture square.
+    auto sprite = ButtonSprite::create(text.c_str(), "goldFont.fnt", "GJ_button_01.png", scale);
+    if (!sprite) return nullptr;
+    return CCMenuItemSpriteExtra::create(sprite, target, handler);
 }
 
 } // namespace fstreak::ui

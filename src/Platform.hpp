@@ -25,3 +25,11 @@
 #else
     #define FSTREAK_CAN_HOOK_USER_CELL 1
 #endif
+
+// GD 2.2091 replaced the flat message list with threads (MessageThreadsPage and
+// ThreadViewPopup); the DM decorations that sit next to a name only exist there.
+#if defined(GEODE_COMP_GD_VERSION) && GEODE_COMP_GD_VERSION >= 22091
+    #define FSTREAK_HAS_THREADS 1
+#else
+    #define FSTREAK_HAS_THREADS 0
+#endif
