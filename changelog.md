@@ -1,3 +1,14 @@
+# v1.1.0
+
+The streak now lives in your chats instead of in a window of its own.
+
+- Flame and day count next to the friend name in the chat list rows on GD 2.2091, and in the title row of an open chat.
+- Tapping that flame opens a small streak card: current streak, best streak, start date, last mutual day, the last seven days and what is still missing today.
+- The card also holds the link flow (My code, Copy, code field, Link), so pairing happens where the streak happens.
+- Removed the standalone streaks window, the friend list inside the mod, and the Pair a friend and Refresh buttons. Nothing in the mod duplicates the message screens any more.
+- Removed the drawn pill backgrounds behind buttons; every button is a Geometry Dash ButtonSprite again, and the menu flame no longer sits on a dark plate.
+- GD 2.2081 keeps working through the open message window and the message list, which is the same screen at that version.
+
 # v1.0.2
 
 - Fixed "GD reports no account signed in" showing up while the player is logged in: the pairing window gave up instead of registering, and a registration already in flight was reported as a failure. It now waits for the registration and shows the reason when it really fails.

@@ -5,6 +5,9 @@
 
 #include <Geode/Geode.hpp>
 
+#include <algorithm>
+#include <cctype>
+
 #include "Platform.hpp"
 
 #include <Geode/modify/GJMessageCell.hpp>
@@ -55,6 +58,24 @@ CCLabelBMFont* findNameLabel(cocos2d::CCNode* root, std::string const& name) {
                 if (name == label->getString()) return label;
             }
             if (auto nested = findNameLabel(child, name)) return nested;
+        }
+    }
+    return nullptr;
+}
+
+/// Same, but tolerant: chats may decorate or shorten the name in the row.
+CCLabelBMFont* findLabelContaining(cocos2d::CCNode* root, std::string const& needle) {
+    if (!root || needle.empty()) return nullptr;
+    std::string wanted = needle;
+    std::transform(wanted.begin(), wanted.end(), wanted.begin(), [](unsigned char c) { return std::tolower(c); });
+    if (auto children = root->getChildren()) {
+        for (auto child : CCArrayExt<CCNode*>(children)) {
+            if (auto label = typeinfo_cast<CCLabelBMFont*>(child)) {
+                std::string text = label->getString();
+                std::transform(text.begin(), text.end(), text.begin(), [](unsigned char c) { return std::tolower(c); });
+                if (!text.empty() && text.find(wanted) != std::string::npos) return label;
+            }
+            if (auto nested = findLabelContaining(child, needle)) return nested;
         }
     }
     return nullptr;
@@ -229,7 +250,9 @@ class $modify(FriendshipStreakThreadCell, GJThreadCell) {
         auto pair = store.pairForFriend(thread->m_accountID);
         if (!pair) return;
 
-        auto label = findNameLabel(this, toStdString(thread->m_userName));
+        auto name = toStdString(thread->m_userName);
+        auto label = findNameLabel(this, name);
+        if (!label) label = findLabelContaining(this, name);
         if (!label || !label->getParent()) return;
 
         constexpr float SIZE = 15.f;
