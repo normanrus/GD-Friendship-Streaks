@@ -559,8 +559,8 @@ class $modify(FriendshipStreakThreadView, ThreadViewPopup) {
         if (self <= 0) return;
 
         auto today = fstreak::utcDay(static_cast<int64_t>(std::time(nullptr)));
-        for (auto node : CCArrayExt<cocos2d::CCNode*>(messages)) {
-            auto message = static_cast<GJThreadMessage*>(node);
+        for (auto object : CCArrayExt<cocos2d::CCObject*>(messages)) {
+            auto message = static_cast<GJThreadMessage*>(object);
             if (!message || message->m_deleted) continue;
             if (message->m_accountID != self) continue;
             if (fstreak::utcDay(message->m_timestamp) != today) continue;
