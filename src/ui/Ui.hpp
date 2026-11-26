@@ -65,7 +65,7 @@ inline CCMenuItemSpriteExtra* button(
     constexpr float height = 34.f;
 
     cocos2d::CCNode* background = nullptr;
-    if (auto slice = NineSlice::create("pill.png"_spr, {0.f, 0.f, width, height}, {14.f, 14.f, 14.f, 14.f})) {
+    if (auto slice = geode::NineSlice::create("pill.png"_spr, {0.f, 0.f, width, height}, {14.f, 14.f, 14.f, 14.f})) {
         slice->setColor({96, 152, 232});
         background = slice;
     } else if (auto solid = rect(width, height, {96, 152, 232, 255})) {
