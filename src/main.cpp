@@ -227,20 +227,32 @@ void placeChatChip(ThreadViewPopup* popup, cocos2d::CCObject* target, cocos2d::S
     if (!Mod::get()->getSettingValue<bool>("show-flame-in-friends")) return;
     if (!popup->m_titleLabel->getParent()) return;
 
-    // The header row is the line the game puts its own top-right buttons on, so it
-    // is the only vertical anchor that cannot drift from the title.
+    // The header row is the line the game puts its own buttons on, so it is the
+    // only vertical anchor that cannot drift from the title. Buttons that sit
+    // lower in the popup (send, scroll to bottom) are not part of that row.
     auto titleBox = worldBox(popup->m_titleLabel);
     float headerY = host->convertToNodeSpace({titleBox.getMidX(), titleBox.getMidY()}).y;
-    bool rowKnown = false;
-    if (popup->m_buttonMenu && popup->m_buttonMenu->getChildrenCount() > 0) {
-        if (auto first = popup->m_buttonMenu->getChildren()->objectAtIndex(0)) {
-            auto item = static_cast<cocos2d::CCNode*>(first);
-            auto world = popup->m_buttonMenu->convertToWorldSpace(item->getPosition());
-            headerY = host->convertToNodeSpace(world).y;
-            rowKnown = true;
+
+    std::vector<cocos2d::CCNode*> headerRow;
+    float rowTop = -1e9f;
+    if (auto menu = popup->m_buttonMenu) {
+        if (auto children = menu->getChildren()) {
+            for (auto child : CCArrayExt<cocos2d::CCNode*>(children)) {
+                if (!child || !child->isVisible()) continue;
+                rowTop = std::max(rowTop, worldBox(child).getMaxY());
+            }
+            for (auto child : CCArrayExt<cocos2d::CCNode*>(children)) {
+                if (!child || !child->isVisible()) continue;
+                if (rowTop - worldBox(child).getMaxY() <= 24.f) headerRow.push_back(child);
+            }
         }
     }
-    (void)rowKnown;
+
+    if (!headerRow.empty()) {
+        float rowBottom = 1e9f;
+        for (auto child : headerRow) rowBottom = std::min(rowBottom, worldBox(child).getMidY());
+        headerY = host->convertToNodeSpace({0.f, rowBottom}).y;
+    }
 
     float nameRight = host->convertToNodeSpace({titleBox.getMaxX(), titleBox.getMidY()}).x;
     for (cocos2d::CCNode* extra : {static_cast<cocos2d::CCNode*>(popup->m_roleBadge),
@@ -251,14 +263,9 @@ void placeChatChip(ThreadViewPopup* popup, cocos2d::CCObject* target, cocos2d::S
     }
 
     float limit = 1e9f;
-    if (auto menu = popup->m_buttonMenu) {
-        if (auto children = menu->getChildren()) {
-            for (auto child : CCArrayExt<cocos2d::CCNode*>(children)) {
-                auto box = worldBox(child);
-                float left = host->convertToNodeSpace({box.getMinX(), box.getMidY()}).x;
-                limit = std::min(limit, left - 4.f);
-            }
-        }
+    for (auto child : headerRow) {
+        float left = host->convertToNodeSpace({worldBox(child).getMinX(), 0.f}).x;
+        limit = std::min(limit, left - 4.f);
     }
     if (popup->m_membersButton) {
         auto box = worldBox(popup->m_membersButton);
@@ -357,9 +364,15 @@ class $modify(FriendshipStreakMenuLayer, MenuLayer) {
     bool init() {
         if (!MenuLayer::init()) return false;
 
-        if (auto ticker = StreakTicker::get()) ticker->attach();
+        // The menu scene is not the running scene yet while init runs, so attach on
+        // the next frame or the ticker would be dropped with the loading scene.
+        this->scheduleOnce(schedule_selector(FriendshipStreakMenuLayer::attachTicker), 0.2f);
         fstreak::StreakStore::get().onMenuOpened();
         return true;
+    }
+
+    void attachTicker(float) {
+        if (auto ticker = StreakTicker::get()) ticker->attach();
     }
 };
 

@@ -4,7 +4,7 @@ Repository notes for future sessions working on Friendship Streaks, a Geode mod 
 
 ## What this is
 
-Shared (mutual) daily streaks between two paired GD players. Flame badge in the main menu, streaks window, friend detail with a 14 day calendar, flames in friend lists, notifications, settings, plus a one file sync server in `server/`.
+Shared (mutual) daily streaks between two paired GD players. The streak is shown where the messages are: a flame with the day count in the chat list and in the open chat, and a compact card (streak numbers, last 7 days, code exchange) that opens from that flame. Colours follow the streak length. Notifications, settings, and a one file sync server in `server/`. There is deliberately no main menu badge and no separate streaks window.
 
 ## Targets
 
@@ -54,8 +54,32 @@ The mod parses exactly the JSON produced by `server/server.py` (`PairState::from
 
 All three come from `GEODE_COMP_GD_VERSION` (22081 / 22091) and the `GEODE_IS_*` macros. Check `build-<target>/bindings/bindings/Geode/CodegenData.json` (`bindings.win` / `bindings.android32`) before adding a call to a GD class: `missing` means the symbol is not available on that platform.
 
+## Chat integration (GD 2.2091)
+
+- Chat rows (`GJThreadCell`) have a name label, but the game draws the preview and the timestamp with `chatFont.fnt`. `threadNameLabel()` in `main.cpp` picks the non `chatFont` label that matches the thread name, and falls back to the topmost text when `m_userName` is empty (some DM threads keep the name on the other member).
+- The row decoration is clamped by `rowRightLimit()`, which measures the real left edge of the timestamp, the unread bubble and the mute/star marks. If there is no room the flame is simply not added: never move or truncate vanilla text.
+- Rows only get a flame when `pair->current > 0`.
+- The open chat chip is placed on the header line. Its Y comes from the game's own top-right buttons (`m_buttonMenu`), not from the title label box, and its X is clamped before the first header button and after `m_roleBadge`/`m_titleEmote`.
+- `ThreadViewPopup::onRefresh` has **no macOS address** in the bindings; do not hook it. Sync already happens on `threadMessagesFinished`, on chat open and on the poll timer.
+- `GJThreadMessage` is a `CCObject`, not a `CCNode`: iterate message arrays as `CCArrayExt<cocos2d::CCObject*>`.
+
+## Syncing
+
+`StreakStore` owns the mirror and the scheduling, so no screen has to remember to refresh:
+
+- `onTick` runs from `StreakTicker` (one node attached to the running scene, re-attached by `MenuLayer::init`). It polls every 6 s with a chat open and every 20 s otherwise.
+- `enterChat()`/`leaveChat()` set the fast interval; `requestRefresh()` collapses bursts with a 3 s floor; `applyServerPairs()` compares before it saves or notifies, so a poll that changed nothing costs no disk write and no redraw.
+- `checkSignedInAccount()` runs every 2 s and drops the previous account's token, pairs and queued events when another GD account logs in.
+- Sending is detected from the messages themselves (`reportOwnMessage`), because the send callbacks are not bound on every platform.
+
 ## Layout rules of thumb
 
-- Streaks window is 460x300, friend detail is 420x340, pairing is 420x260. Vertical constants live at the top of each popup; check for overlaps before moving things.
-- All drawing helpers are in `src/ui/Ui.hpp` (panel, pill, button, dots) and take plain nodes, so they work in any layer.
+- Streak card is 300x244; vertical constants live at the top of `StreakInfoPopup.cpp`; check for overlaps before moving things.
+- `FlameNode` switches between pre-tinted textures (`flame.png`, `flame-blue.png`, `flame-purple.png`, `flame-gold.png`). Multiplying the orange art with a blue tint looks muddy, so do not go back to `setColor` for stages.
+- All drawing helpers are in `src/ui/Ui.hpp` (rect, label, button, dots) and take plain nodes, so they work in any layer.
+- The card sets its own opacity to 0: the game already dims the screen behind a chat, and a second dim looks like an extra black background.
 - Days are server (UTC) days everywhere in the UI. Do not mix in local time.
+
+## Binary assets
+
+`logo.png` lives in the repository root (README/about only). Everything the mod loads at runtime is in `resources/`.
