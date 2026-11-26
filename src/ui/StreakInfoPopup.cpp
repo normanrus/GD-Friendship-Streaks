@@ -22,12 +22,12 @@ cocos2d::CCSprite* dayDot(bool alive) {
     return dot;
 }
 
-cocos2d::CCMenuItemSpriteExtra* textButton(
+CCMenuItemSpriteExtra* textButton(
     char const* text, cocos2d::CCObject* target, cocos2d::SEL_MenuHandler handler, float scale = 0.7f
 ) {
     auto sprite = ButtonSprite::create(text, "goldFont.fnt", "GJ_button_01.png", scale);
     if (!sprite) return nullptr;
-    return cocos2d::CCMenuItemSpriteExtra::create(sprite, target, handler);
+    return CCMenuItemSpriteExtra::create(sprite, target, handler);
 }
 
 std::string linkErrorText(std::string const& error) {

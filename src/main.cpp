@@ -289,7 +289,7 @@ class $modify(FriendshipStreakThreadView, ThreadViewPopup) {
             flame->setDimmed(true);
         }
 
-        auto item = cocos2d::CCMenuItemSpriteExtra::create(
+        auto item = CCMenuItemSpriteExtra::create(
             flame, this, menu_selector(FriendshipStreakThreadView::onChip)
         );
         if (!item) return;
@@ -339,7 +339,7 @@ class $modify(FriendshipStreakMessagePopup, GJMessagePopup) {
             flame->setDimmed(true);
         }
 
-        auto item = cocos2d::CCMenuItemSpriteExtra::create(
+        auto item = CCMenuItemSpriteExtra::create(
             flame, this, menu_selector(FriendshipStreakMessagePopup::onChip)
         );
         if (!item) return true;
