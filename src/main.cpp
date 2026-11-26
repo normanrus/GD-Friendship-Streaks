@@ -539,11 +539,6 @@ class $modify(FriendshipStreakThreadView, ThreadViewPopup) {
         fstreak::StreakStore::get().requestRefresh("messages");
     }
 
-    void onRefresh(cocos2d::CCObject* sender) {
-        ThreadViewPopup::onRefresh(sender);
-        fstreak::StreakStore::get().requestRefresh("chat-refresh");
-    }
-
     void placeChip() {
         placeChatChip(this, this, menu_selector(FriendshipStreakThreadView::onChip));
     }
