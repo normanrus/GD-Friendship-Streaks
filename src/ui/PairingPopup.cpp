@@ -15,6 +15,17 @@ namespace {
 constexpr float POPUP_WIDTH = 400.f;
 constexpr float POPUP_HEIGHT = 300.f;
 
+std::string linkErrorText(std::string const& error) {
+    if (error == "self_pair") return "That is your own code. Ask your friend for theirs.";
+    if (error == "invite_not_found") return "No invite with that code. Check the letters.";
+    if (error == "invite_expired") return "That code expired. Ask for a new one.";
+    if (error == "already_paired") return "You are already linked with this friend.";
+    if (error == "no_account") return "Sign in to a GD account first.";
+    if (error == "no_server") return "Set the server URL in mod settings.";
+    if (error == "bad_token") return "Session expired. Try again.";
+    return fmt::format("Link failed ({})", error);
+}
+
 } // namespace
 
 PairingPopup* PairingPopup::create() {
@@ -143,13 +154,17 @@ void PairingPopup::buildRedeemSection() {
 
 void PairingPopup::refreshInviteCode() {
     auto& store = StreakStore::get();
-    if (m_statusLabel) m_statusLabel->setString("Creating a code...");
+    if (m_statusLabel) {
+        m_statusLabel->setColor(ui::COLOR_MUTED);
+        m_statusLabel->setString("Creating a code...");
+    }
 
     geode::Ref<PairingPopup> self = this;
     store.createInvite([self](std::string code, std::string error) {
         if (!self->m_codeLabel || !self->m_statusLabel) return;
         if (!error.empty()) {
-            self->m_statusLabel->setString(fmt::format("Could not create a code ({})", error).c_str());
+            self->m_statusLabel->setColor(ui::COLOR_DEAD);
+            self->m_statusLabel->setString(linkErrorText(error).c_str());
             return;
         }
         self->m_codeLabel->setString(code.c_str());
@@ -194,15 +209,19 @@ void PairingPopup::onLink(CCObject*) {
         return;
     }
 
-    if (m_statusLabel) m_statusLabel->setString("Linking...");
+    if (m_statusLabel) {
+        m_statusLabel->setColor(ui::COLOR_MUTED);
+        m_statusLabel->setString("Linking...");
+    }
     geode::Ref<PairingPopup> self = this;
     store.redeem(code, [self](bool ok, std::string error) {
         if (!self->m_statusLabel) return;
         if (!ok) {
-            self->m_statusLabel->setString(fmt::format("Link failed ({})", error).c_str());
-            notify::toast("Could not link that code", 2.5f);
+            self->m_statusLabel->setColor(ui::COLOR_DEAD);
+            self->m_statusLabel->setString(linkErrorText(error).c_str());
             return;
         }
+        self->m_statusLabel->setColor(ui::COLOR_ALIVE);
         self->m_statusLabel->setString("Linked! Your shared streak starts today.");
         notify::toast("Friendship streak linked", 2.5f);
     });

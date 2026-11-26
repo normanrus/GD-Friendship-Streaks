@@ -84,8 +84,23 @@ void StreakStore::onMenuOpened() {
     });
 }
 
+void StreakStore::dropStaleAccount() {
+    auto* manager = GJAccountManager::get();
+    int signedIn = manager ? manager->m_accountID : 0;
+    if (signedIn <= 0 || !m_account.valid() || m_account.accountId == signedIn) return;
+
+    // Another GD account is signed in on this install: the token, the pairs and the
+    // queued events all belong to the previous account.
+    m_account = Account{};
+    m_pairs.clear();
+    m_pending.clear();
+    save();
+    notifyListeners();
+}
+
 void StreakStore::ensureAccount(std::function<void(bool)> callback) {
     load();
+    dropStaleAccount();
     if (m_account.valid()) {
         if (callback) callback(true);
         return;
@@ -120,6 +135,7 @@ void StreakStore::ensureAccount(std::function<void(bool)> callback) {
 
 void StreakStore::refresh(std::function<void(bool)> callback) {
     load();
+    dropStaleAccount();
     if (!configured() || !m_account.valid()) {
         if (callback) callback(false);
         return;
@@ -275,8 +291,15 @@ void StreakStore::sendNextPending() {
 
 void StreakStore::createInvite(std::function<void(std::string, std::string)> callback) {
     load();
+    dropStaleAccount();
     if (!m_account.valid()) {
-        if (callback) callback("", "no_account");
+        ensureAccount([this, callback](bool ok) {
+            if (!ok) {
+                if (callback) callback("", "no_account");
+                return;
+            }
+            createInvite(callback);
+        });
         return;
     }
     StreakApi::createInvite(m_account, [callback](ApiResult result) {
@@ -290,8 +313,15 @@ void StreakStore::createInvite(std::function<void(std::string, std::string)> cal
 
 void StreakStore::redeem(std::string code, std::function<void(bool, std::string)> callback) {
     load();
+    dropStaleAccount();
     if (!m_account.valid()) {
-        if (callback) callback(false, "no_account");
+        ensureAccount([this, code, callback](bool ok) {
+            if (!ok) {
+                if (callback) callback(false, "no_account");
+                return;
+            }
+            redeem(code, callback);
+        });
         return;
     }
     StreakApi::redeem(m_account, code, [this, callback](ApiResult result) {

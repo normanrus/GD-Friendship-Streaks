@@ -1,3 +1,9 @@
+# v1.0.1
+
+- Fixed linking a second GD account on the same install: the cached token of the previous account was reused, so the server rejected the code as `self_pair`.
+- Fixed the pairing buttons rendering as pink missing-texture squares on GD 2.2091: buttons are drawn from the mod's own texture instead of a game sheet frame.
+- Link and invite errors are now plain sentences instead of raw server codes, and they no longer pop a notification over the code field.
+
 # v1.0.0
 
 - Added friendship streaks: a shared daily streak between two paired players, grown when both write each other on the same day.

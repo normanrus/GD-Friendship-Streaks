@@ -56,13 +56,27 @@ inline void fadeIn(cocos2d::CCNode* node, float delay, float duration = 0.22f) {
 inline CCMenuItemSpriteExtra* button(
     std::string const& text, float scale, cocos2d::CCObject* target, cocos2d::SEL_MenuHandler handler
 ) {
-    auto sprite = cocos2d::CCSprite::createWithSpriteFrameName("GJ_button_01.png");
+    // Drawn from the mod's own pill instead of a game sheet frame: a frame that is
+    // missing on the running GD version renders as the pink missing-texture square.
     auto caption = label(text, "bigFont.fnt", 0.42f * scale, {255, 255, 255});
-    if (caption && sprite) {
-        caption->setPosition({sprite->getContentSize().width / 2.f, sprite->getContentSize().height / 2.f - 1.f});
-        sprite->addChild(caption);
+    if (!caption) return nullptr;
+
+    float width = std::max(92.f, caption->getContentSize().width * 0.42f * scale + 32.f);
+    constexpr float height = 34.f;
+
+    cocos2d::CCNode* background = nullptr;
+    if (auto slice = NineSlice::create("pill.png"_spr, {0.f, 0.f, width, height}, {14.f, 14.f, 14.f, 14.f})) {
+        slice->setColor({96, 152, 232});
+        background = slice;
+    } else if (auto solid = rect(width, height, {96, 152, 232, 255})) {
+        background = solid;
     }
-    auto item = CCMenuItemSpriteExtra::create(sprite, target, handler);
+    if (!background) return nullptr;
+
+    caption->setPosition({width / 2.f, height / 2.f - 1.f});
+    background->addChild(caption);
+
+    auto item = CCMenuItemSpriteExtra::create(background, target, handler);
     item->setScale(scale);
     return item;
 }

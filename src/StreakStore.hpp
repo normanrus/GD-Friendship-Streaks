@@ -51,6 +51,8 @@ public:
     void notifyListeners();
 
 private:
+    /// Drops the cached identity when a different GD account is signed in.
+    void dropStaleAccount();
     void applyServerPairs(std::vector<PairState> const& fresh);
     void announce(PairState& pair, std::optional<PairState> const& previous);
     void enqueue(std::string const& pairId, std::string const& kind);
