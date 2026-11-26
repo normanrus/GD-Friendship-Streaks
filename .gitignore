@@ -30,3 +30,7 @@ CMakeUserPresets.json
 # Other
 .cache/
 __pycache__/
+
+# local demo server state
+.demo/
+*.sqlite3
