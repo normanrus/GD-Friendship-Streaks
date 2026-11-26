@@ -249,10 +249,6 @@ class $modify(FriendshipStreakThreadCell, GJThreadCell) {
 
 /// Flame next to the title of an open chat; tapping it opens the streak card.
 class $modify(FriendshipStreakThreadView, ThreadViewPopup) {
-    struct Fields {
-        cocos2d::CCNode* chip = nullptr;
-    };
-
     bool init(GJMessageThread* thread) {
         if (!ThreadViewPopup::init(thread)) return false;
         this->placeChip();
@@ -265,15 +261,14 @@ class $modify(FriendshipStreakThreadView, ThreadViewPopup) {
     }
 
     void placeChip() {
-        if (m_fields->chip) {
-            m_fields->chip->removeFromParent();
-            m_fields->chip = nullptr;
-        }
         removeDecoration(this, kFlameTag);
 
         auto thread = m_thread;
         if (!thread || !thread->m_isDM || !m_titleLabel || !m_titleLabel->getParent()) return;
         if (!Mod::get()->getSettingValue<bool>("show-flame-in-friends")) return;
+
+        auto host = m_titleLabel->getParent();
+        if (auto old = host->getChildByTag(kFlameTag)) old->removeFromParent();
 
         auto& store = fstreak::StreakStore::get();
         store.load();
@@ -299,8 +294,7 @@ class $modify(FriendshipStreakThreadView, ThreadViewPopup) {
         menu->setPosition({box.getMaxX() + 6.f + SIZE * 0.5f, box.getMidY()});
         menu->addChild(item);
         menu->setTag(kFlameTag);
-        m_fields->chip = menu;
-        m_titleLabel->getParent()->addChild(menu, 20);
+        host->addChild(menu, 20);
     }
 
     void onChip(cocos2d::CCObject*) {
