@@ -24,11 +24,22 @@ Same sources for both; only `mod.json`'s `geode` and `gd` fields change. `script
 ## Gotchas learned the hard way
 
 - `Notification::create(...)` does **not** show anything by itself; always call `->show()`. `Notify.cpp` wraps this in `pop()`.
-- Do not add a `CCNode` that owns a `CCMenu` into another `CCMenu` (the main menu badge). Add it to the layer and position it from the profile button's world position.
+- Do not add a `CCNode` that owns a `CCMenu` into another `CCMenu`. Add it to the layer and position it from the anchor node's world position.
+- While `MenuLayer::init` runs the menu scene is not the running scene yet, so a helper node added to `getRunningScene()` there is dropped with the loading scene. Schedule the attach one frame later.
+- `CCLabelBMFont::getString()` returns `char const*` in Geode 5 and a string view in places in Geode 6; build text with `std::string(...)` rather than `.c_str()` on it.
 - Async callbacks that touch a popup must capture `geode::Ref<Popup>`; the user can close the window before the response arrives.
 - `mod.json`'s `geode` field has no `v` prefix.
 - The Geode 6 SDK checkout needs `bin/6.0.0/Geode.android{32,64}.so` from the release zips before CMake can link.
 - Local Android builds need the NDK extracted with `unzip` (Python's zipfile breaks the clang wrapper symlinks) and its `bin` on `PATH`.
+
+## Releasing
+
+1. Push to `main`. Both workflows build Windows, macOS, Android32 and Android64 and then a `package` job combines them into one `.geode` per GD version (artifacts `Build Output` and `Build Output 2.2091`).
+2. Download both artifacts, then upload them to the release as `friendship-streaks-v<ver>-gd2.2081-windows-macos-android.geode` and `...-gd2.2091-...`, plus a zip with both packages, the docs, `logo.png` and `server/`.
+3. Asset uploads go to `https://uploads.github.com/repos/<owner>/<repo>/releases/<id>/assets?name=<file>`; `api.github.com` returns 404 for uploads.
+4. The packaged `.geode` already contains `logo.png`, `about.md` and `changelog.md` from the repository root.
+
+CI notes: a macOS job can sit in the queue for a long time and is cancelled when a newer push arrives, so check the job list, not just the run conclusion. Bindings differ per platform: `ThreadViewPopup::onRefresh` exists on Windows only, and hooking a function without an address fails at compile time with a `static_assert`.
 
 ## Tests
 
