@@ -66,7 +66,8 @@ void StreakApi::request(
 }
 
 void StreakApi::registerAccount(
-    int accountId, std::string const& username, std::function<void(std::optional<Account>)> callback
+    int accountId, std::string const& username,
+    std::function<void(std::optional<Account>, std::string)> callback
 ) {
     auto body = matjson::Value::object();
     body["accountId"] = accountId;
@@ -74,14 +75,18 @@ void StreakApi::registerAccount(
 
     request("POST", "/v1/register", "", body, [callback = std::move(callback)](ApiResult result) {
         if (!result.ok) {
-            if (callback) callback(std::nullopt);
+            if (callback) callback(std::nullopt, result.error.empty() ? "request_failed" : result.error);
             return;
         }
         Account account;
         account.accountId = jsonInt(result.body, "accountId");
         account.username = jsonString(result.body, "username");
         account.token = jsonString(result.body, "token");
-        if (callback) callback(account.valid() ? std::optional<Account>(account) : std::nullopt);
+        if (!account.valid()) {
+            if (callback) callback(std::nullopt, "bad_response");
+            return;
+        }
+        if (callback) callback(account, "");
     });
 }
 

@@ -1,3 +1,9 @@
+# v1.0.2
+
+- Fixed "GD reports no account signed in" showing up while the player is logged in: the pairing window gave up instead of registering, and a registration already in flight was reported as a failure. It now waits for the registration and shows the reason when it really fails.
+- The pairing window and the streaks window show which GD account the game reports, so a missing login is visible instead of guessed.
+- Registration and network failures now say what happened ("Cannot reach the server", "The server answered 500") instead of "sign in first".
+
 # v1.0.1
 
 - Fixed linking a second GD account on the same install: the cached token of the previous account was reused, so the server rejected the code as `self_pair`.

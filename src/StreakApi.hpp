@@ -30,8 +30,10 @@ public:
         std::optional<matjson::Value> body, std::function<void(ApiResult)> callback
     );
 
+    /// `error` is empty on success, otherwise the server or transport code.
     static void registerAccount(
-        int accountId, std::string const& username, std::function<void(std::optional<Account>)> callback
+        int accountId, std::string const& username,
+        std::function<void(std::optional<Account>, std::string error)> callback
     );
     static void listPairs(Account const& account, std::function<void(ApiResult)> callback);
     static void createInvite(Account const& account, std::function<void(ApiResult)> callback);

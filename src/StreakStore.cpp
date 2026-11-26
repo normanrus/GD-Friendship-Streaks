@@ -84,9 +84,20 @@ void StreakStore::onMenuOpened() {
     });
 }
 
+int StreakStore::signedInAccountId() {
+    auto* manager = GJAccountManager::sharedState();
+    if (!manager) manager = GJAccountManager::get();
+    return manager ? manager->m_accountID : 0;
+}
+
+std::string StreakStore::signedInUsername() {
+    auto* manager = GJAccountManager::sharedState();
+    if (!manager) manager = GJAccountManager::get();
+    return manager ? std::string(manager->m_username) : std::string();
+}
+
 void StreakStore::dropStaleAccount() {
-    auto* manager = GJAccountManager::get();
-    int signedIn = manager ? manager->m_accountID : 0;
+    int signedIn = signedInAccountId();
     if (signedIn <= 0 || !m_account.valid() || m_account.accountId == signedIn) return;
 
     // Another GD account is signed in on this install: the token, the pairs and the
@@ -105,30 +116,41 @@ void StreakStore::ensureAccount(std::function<void(bool)> callback) {
         if (callback) callback(true);
         return;
     }
+    // A registration started by the main menu may still be in flight: wait for it
+    // instead of reporting a failure the player cannot act on.
     if (m_registering) {
-        if (callback) callback(false);
+        if (callback) m_accountWaiters.push_back(callback);
         return;
     }
 
-    auto* manager = GJAccountManager::get();
-    if (!manager || manager->m_accountID <= 0) {
+    auto accountId = signedInAccountId();
+    if (accountId <= 0) {
         // Streaks need a real GD account: that is the identity shared by both players.
+        m_accountError = "no_account";
         if (callback) callback(false);
         return;
     }
 
     m_registering = true;
-    auto username = std::string(manager->m_username);
+    m_accountError.clear();
+    auto username = signedInUsername();
     StreakApi::registerAccount(
-        manager->m_accountID, username, [this, callback](std::optional<Account> account) {
+        accountId, username,
+        [this, callback](std::optional<Account> account, std::string error) {
             m_registering = false;
             if (!account) {
-                if (callback) callback(false);
-                return;
+                m_accountError = error.empty() ? "request_failed" : error;
+            } else {
+                m_account = *account;
+                m_accountError.clear();
+                save();
             }
-            m_account = *account;
-            save();
-            if (callback) callback(true);
+            if (callback) callback(account.has_value());
+            auto waiters = std::move(m_accountWaiters);
+            m_accountWaiters.clear();
+            for (auto& waiter : waiters) {
+                if (waiter) waiter(account.has_value());
+            }
         }
     );
 }
@@ -295,7 +317,7 @@ void StreakStore::createInvite(std::function<void(std::string, std::string)> cal
     if (!m_account.valid()) {
         ensureAccount([this, callback](bool ok) {
             if (!ok) {
-                if (callback) callback("", "no_account");
+                if (callback) callback("", m_accountError.empty() ? "no_account" : m_accountError);
                 return;
             }
             createInvite(callback);
@@ -317,7 +339,7 @@ void StreakStore::redeem(std::string code, std::function<void(bool, std::string)
     if (!m_account.valid()) {
         ensureAccount([this, code, callback](bool ok) {
             if (!ok) {
-                if (callback) callback(false, "no_account");
+                if (callback) callback(false, m_accountError.empty() ? "no_account" : m_accountError);
                 return;
             }
             redeem(code, callback);

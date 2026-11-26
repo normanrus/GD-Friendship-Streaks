@@ -22,7 +22,13 @@ public:
     void load();
     void save();
 
+    /// GD account currently signed in to the game, independent of the server identity.
+    static int signedInAccountId();
+    static std::string signedInUsername();
+
     Account const& account() const { return m_account; }
+    /// Why the last registration failed: "no_account", "no_server", "http_500", ...
+    std::string const& accountError() const { return m_accountError; }
     bool hasAccount() const { return m_account.valid(); }
     bool configured() const { return StreakApi::configured(); }
     std::vector<PairState> const& pairs() const { return m_pairs; }
@@ -67,6 +73,8 @@ private:
     bool m_refreshing = false;
     bool m_flushing = false;
     bool m_registering = false;
+    std::string m_accountError;
+    std::vector<std::function<void(bool)>> m_accountWaiters;
 };
 
 } // namespace fstreak

@@ -20,10 +20,13 @@ std::string linkErrorText(std::string const& error) {
     if (error == "invite_not_found") return "No invite with that code. Check the letters.";
     if (error == "invite_expired") return "That code expired. Ask for a new one.";
     if (error == "already_paired") return "You are already linked with this friend.";
-    if (error == "no_account") return "Sign in to a GD account first.";
-    if (error == "no_server") return "Set the server URL in mod settings.";
-    if (error == "bad_token") return "Session expired. Try again.";
-    return fmt::format("Link failed ({})", error);
+    if (error == "no_account") return "GD reports no account signed in. Log in and reopen this window.";
+    if (error == "no_server") return "Set the Server URL in the mod settings.";
+    if (error == "bad_token") return "Session expired. Press the button again.";
+    if (error == "bad_response") return "The server sent something unexpected.";
+    if (error == "request_failed" || error == "timeout") return "Cannot reach the server. Check the Server URL.";
+    if (error.rfind("http_", 0) == 0) return fmt::format("The server answered {}.", error.substr(5));
+    return fmt::format("Failed: {}", error);
 }
 
 } // namespace
@@ -62,6 +65,16 @@ bool PairingPopup::init() {
         m_mainLayer->addChild(intro, 1);
     }
 
+    auto gdId = StreakStore::signedInAccountId();
+    auto gdName = StreakStore::signedInUsername();
+    auto accountText = gdId > 0
+        ? fmt::format("Signed in as {} (#{})", gdName.empty() ? "GD account" : gdName, gdId)
+        : std::string("GD reports no account signed in");
+    if (auto who = ui::label(accountText, "chatFont.fnt", 0.55f, gdId > 0 ? ui::COLOR_MUTED : ui::COLOR_DEAD)) {
+        who->setPosition({POPUP_WIDTH / 2.f, POPUP_HEIGHT - 44.f});
+        m_mainLayer->addChild(who, 1);
+    }
+
     if (auto line = ui::rect(POPUP_WIDTH - 60.f, 1.5f, {255, 255, 255, 36})) {
         line->setPosition({POPUP_WIDTH / 2.f, POPUP_HEIGHT - 84.f});
         m_mainLayer->addChild(line, 1);
@@ -81,7 +94,18 @@ bool PairingPopup::init() {
         return true;
     }
     if (!store.hasAccount()) {
-        if (m_statusLabel) m_statusLabel->setString("Log in to a GD account to create your code");
+        if (m_statusLabel) m_statusLabel->setString("Connecting to your account...");
+        geode::Ref<PairingPopup> self = this;
+        store.ensureAccount([self](bool ok) {
+            if (!self->m_statusLabel) return;
+            if (!ok) {
+                self->m_statusLabel->setColor(ui::COLOR_DEAD);
+                self->m_statusLabel->setString(linkErrorText(StreakStore::get().accountError()).c_str());
+                return;
+            }
+            self->m_statusLabel->setColor(ui::COLOR_MUTED);
+            self->refreshInviteCode();
+        });
         return true;
     }
     this->refreshInviteCode();

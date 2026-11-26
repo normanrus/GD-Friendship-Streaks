@@ -121,7 +121,15 @@ void FriendshipStreaksPopup::updateFooter() {
     if (!store.configured()) {
         m_footerLabel->setString("Sync server not set up");
     } else if (!store.hasAccount()) {
-        m_footerLabel->setString("Log in to a GD account to sync streaks");
+        auto gdId = StreakStore::signedInAccountId();
+        auto gdName = StreakStore::signedInUsername();
+        if (gdId > 0) {
+            m_footerLabel->setString(
+                fmt::format("GD account {} (#{}) - not connected yet", gdName.empty() ? "signed in" : gdName, gdId).c_str()
+            );
+        } else {
+            m_footerLabel->setString("GD reports no account signed in");
+        }
     } else {
         m_footerLabel->setString(fmt::format("Synced as {}", store.account().username).c_str());
     }
