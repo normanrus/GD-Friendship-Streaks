@@ -7,7 +7,7 @@
 
 #include <Geode/Geode.hpp>
 
-#include "core/FriendStreakCore.hpp"
+#include "../core/FriendStreakCore.hpp"
 
 namespace fstreak {
 

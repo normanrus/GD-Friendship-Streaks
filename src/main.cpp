@@ -28,6 +28,9 @@
 #endif
 #include <Geode/modify/MenuLayer.hpp>
 #include <Geode/modify/ProfilePage.hpp>
+#if __has_include(<Geode/binding/CustomListView.hpp>)
+#include <Geode/binding/CustomListView.hpp>
+#endif
 #if FSTREAK_HAS_THREADS
 #include <Geode/modify/GJThreadCell.hpp>
 #include <Geode/modify/MessageThreadsPage.hpp>
@@ -57,6 +60,10 @@ std::function<void()> g_refreshThreadList;
 template <class Str>
 std::string toStdString(Str const& value) {
     return std::string(value.c_str());
+}
+
+std::string labelText(CCLabelBMFont* label) {
+    return label ? std::string(label->getString()) : std::string();
 }
 
 std::string lowercased(std::string text) {
@@ -110,7 +117,7 @@ void removeDecoration(cocos2d::CCNode* root, int tag) {
 
 bool usesChatFont(CCLabelBMFont* label) {
     if (!label) return false;
-    return std::string(label->m_sFntFile.c_str()).find("chatFont") != std::string::npos;
+    return std::string(label->m_sFntFile).find("chatFont") != std::string::npos;
 }
 
 #if FSTREAK_HAS_THREADS
@@ -128,12 +135,12 @@ CCLabelBMFont* threadNameLabel(cocos2d::CCNode* cell, std::string const& name) {
     for (auto label : labels) {
         if (usesChatFont(label)) {
             // The preview and the timestamp: never a good place for the flame.
-            if (hasName && !fallback && textMatches(toStdString(label->getString()), name)) {
+            if (hasName && !fallback && textMatches(labelText(label), name)) {
                 fallback = label;
             }
             continue;
         }
-        if (hasName && !textMatches(toStdString(label->getString()), name)) continue;
+        if (hasName && !textMatches(labelText(label), name)) continue;
         if (label->getPositionY() > bestY) {
             bestY = label->getPositionY();
             best = label;
@@ -210,7 +217,7 @@ void decorateThreadCell(GJThreadCell* cell) {
 
 /// Flame next to the name in the open chat, on the same line as the game's own
 /// header buttons. Tapping it opens the streak card.
-void placeChatChip(ThreadViewPopup* popup, CCObject* target, SEL_MenuHandler handler) {
+void placeChatChip(ThreadViewPopup* popup, cocos2d::CCObject* target, cocos2d::SEL_MenuHandler handler) {
     if (!popup) return;
     removeDecoration(popup, kFlameTag);
 
@@ -374,7 +381,7 @@ class $modify(FriendshipStreakUserCell, FSTREAK_USER_CELL) {
             std::vector<CCLabelBMFont*> labels;
             collectLabels(this, labels);
             for (auto candidate : labels) {
-                if (textMatches(toStdString(candidate->getString()), name) && !usesChatFont(candidate)) {
+                if (textMatches(labelText(candidate), name) && !usesChatFont(candidate)) {
                     return candidate;
                 }
             }
@@ -432,7 +439,7 @@ class $modify(FriendshipStreakProfilePage, ProfilePage) {
         std::vector<CCLabelBMFont*> labels;
         collectLabels(this, labels);
         for (auto candidate : labels) {
-            if (textMatches(toStdString(candidate->getString()), name) && !usesChatFont(candidate)) {
+            if (textMatches(labelText(candidate), name) && !usesChatFont(candidate)) {
                 label = candidate;
                 break;
             }
