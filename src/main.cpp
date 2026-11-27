@@ -187,8 +187,7 @@ void decorateThreadCell(GJThreadCell* cell) {
     if (!Mod::get()->getSettingValue<bool>("show-flame-in-friends")) return;
 
     auto pair = fstreak::StreakStore::get().pairForFriend(thread->m_accountID);
-    // No active streak, no indicator: the row stays exactly as vanilla draws it.
-    if (!pair || pair->current <= 0) return;
+    int streak = pair ? pair->current : 0;
 
     auto label = threadNameLabel(cell, toStdString(thread->m_userName));
     if (!label || !label->getParent()) return;
@@ -205,7 +204,10 @@ void decorateThreadCell(GJThreadCell* cell) {
     auto flame = fstreak::FlameNode::create(SIZE, true);
     if (!flame) return;
     flame->setTag(kFlameTag);
-    flame->setStreak(pair->current);
+    flame->setStreak(streak);
+    // A friend without a running streak keeps a dimmed flame, so the entry point
+    // to the streak card is on every chat row instead of only on live ones.
+    flame->setDimmed(streak <= 0);
     flame->setPosition({x, box.getMidY()});
     host->addChild(flame, 20);
 }
@@ -380,7 +382,7 @@ class $modify(FriendshipStreakUserCell, FSTREAK_USER_CELL) {
         if (!Mod::get()->getSettingValue<bool>("show-flame-in-friends")) return;
 
         auto pair = fstreak::StreakStore::get().pairForFriend(score->m_accountID);
-        if (!pair || pair->current <= 0) return;
+        int streak = pair ? pair->current : 0;
 
         auto name = toStdString(score->m_userName);
         cocos2d::CCPoint position = {this->getContentSize().width - 56.f, this->getContentSize().height / 2.f};
@@ -403,7 +405,8 @@ class $modify(FriendshipStreakUserCell, FSTREAK_USER_CELL) {
         auto flame = fstreak::FlameNode::create(20.f, true);
         if (!flame) return;
         flame->setTag(kFlameTag);
-        flame->setStreak(pair->current);
+        flame->setStreak(streak);
+        flame->setDimmed(streak <= 0);
         flame->setPosition(position);
         this->addChild(flame, 20);
     }
@@ -419,12 +422,13 @@ class $modify(FriendshipStreakMessageCell, GJMessageCell) {
         if (!Mod::get()->getSettingValue<bool>("show-flame-in-friends")) return;
 
         auto pair = fstreak::StreakStore::get().pairForFriend(message->m_accountID);
-        if (!pair || pair->current <= 0) return;
+        int streak = pair ? pair->current : 0;
 
         auto flame = fstreak::FlameNode::create(20.f, true);
         if (!flame) return;
         flame->setTag(kFlameTag);
-        flame->setStreak(pair->current);
+        flame->setStreak(streak);
+        flame->setDimmed(streak <= 0);
         flame->setPosition({this->getContentSize().width - 46.f, this->getContentSize().height - 16.f});
         this->addChild(flame, 20);
     }

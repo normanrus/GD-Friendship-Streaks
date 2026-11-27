@@ -12,7 +12,7 @@ TikTok style streaks work because two people are in it together. This mod brings
 
 The streak lives where the messages are, so there is no second inbox to learn.
 
-- In the chat list, every friend with a running streak gets a small flame and the day count right after their name. Friends without a streak keep the row exactly as the game draws it.
+- In the chat list, the message list and the friends list, every friend gets a small flame right after their name. It is bright with a day count while the streak is running, and dimmed without a number while there is nothing to count yet.
 - In an open chat, the same flame sits on the title line, lined up with the game's own header buttons, and it never runs under a long name.
 - Tap it and a compact card opens: current streak, best streak, the date the streak started, the last day you both wrote, the last seven days, what is still missing today, and the code exchange that starts a new streak.
 

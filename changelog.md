@@ -1,3 +1,11 @@
+# v1.2.1
+
+The flame is back on every friend, not only on live streaks.
+
+- Chat list rows, the message list and the friends list draw the flame again for every DM friend, dimmed with no day count when there is no running streak. Only a live streak gets the bright flame and the number, so the mod is visible and the streak card stays one tap away even before the first pair exists.
+- v1.2.0 hid those indicators entirely for friends without a running streak. Nothing was broken, but with an empty pair list the mod looked like it was not installed.
+- The profile page keeps the v1.2.0 fix: only a friend's profile is decorated, and only while a streak is running.
+
 # v1.2.0
 
 GD 2.2091 only, and the profile page stops being touched where it should not be.
