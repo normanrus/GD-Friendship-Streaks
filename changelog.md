@@ -1,3 +1,11 @@
+# v1.2.2
+
+Diagnostics build: tells us where the flame gets lost.
+
+- On the main menu the mod now shows one toast per launch with the number of pairs in the local mirror and the state of the flame setting. No toast at all means the mod is not loading; a toast with `0 pair(s)` means the mod is fine and there is simply nothing to draw.
+- Every decoration path writes to the Geode log: which row it was, whether the name label was found, whether there was room for the flame, whether the flame sprite loaded, and where it was placed. Failures are logged as warnings and errors.
+- Nothing about the drawing itself changed from v1.2.1.
+
 # v1.2.1
 
 The flame is back on every friend, not only on live streaks.

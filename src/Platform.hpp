@@ -20,3 +20,16 @@
 #else
     #define FSTREAK_CAN_HOOK_USER_CELL 1
 #endif
+
+// Only used to name the platform in the log line the mod writes on load.
+#if defined(GEODE_IS_ANDROID)
+    #define FSTREAK_PLATFORM "android"
+#elif defined(GEODE_IS_WINDOWS)
+    #define FSTREAK_PLATFORM "windows"
+#elif defined(GEODE_IS_MACOS)
+    #define FSTREAK_PLATFORM "macos"
+#elif defined(GEODE_IS_IOS)
+    #define FSTREAK_PLATFORM "ios"
+#else
+    #define FSTREAK_PLATFORM "unknown"
+#endif

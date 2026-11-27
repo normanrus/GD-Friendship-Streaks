@@ -190,7 +190,10 @@ void decorateThreadCell(GJThreadCell* cell) {
     int streak = pair ? pair->current : 0;
 
     auto label = threadNameLabel(cell, toStdString(thread->m_userName));
-    if (!label || !label->getParent()) return;
+    if (!label || !label->getParent()) {
+        log::warn("chat row {}: no name label, flame skipped", toStdString(thread->m_userName));
+        return;
+    }
 
     auto host = label->getParent();
     auto box = label->boundingBox();
@@ -199,10 +202,16 @@ void decorateThreadCell(GJThreadCell* cell) {
     float half = SIZE * 0.5f;
     float x = box.getMaxX() + 6.f + half;
     float limit = rowRightLimit(cell, host);
-    if (x + half > limit) return;
+    if (x + half > limit) {
+        log::warn("chat row {}: no room ({} > {})", toStdString(thread->m_userName), x + half, limit);
+        return;
+    }
 
     auto flame = fstreak::FlameNode::create(SIZE, true);
-    if (!flame) return;
+    if (!flame) {
+        log::error("chat row {}: flame node failed (sprite frame missing?)", toStdString(thread->m_userName));
+        return;
+    }
     flame->setTag(kFlameTag);
     flame->setStreak(streak);
     // A friend without a running streak keeps a dimmed flame, so the entry point
@@ -210,6 +219,7 @@ void decorateThreadCell(GJThreadCell* cell) {
     flame->setDimmed(streak <= 0);
     flame->setPosition({x, box.getMidY()});
     host->addChild(flame, 20);
+    log::info("chat row {}: flame drawn ({} days)", toStdString(thread->m_userName), streak);
 }
 
 /// Flame next to the name in the open chat, on the same line as the game's own
@@ -220,7 +230,11 @@ void placeChatChip(ThreadViewPopup* popup, cocos2d::CCObject* target, cocos2d::S
 
     auto thread = popup->m_thread;
     auto host = popup->m_mainLayer;
-    if (!thread || !thread->m_isDM || !host || !popup->m_titleLabel) return;
+    if (!thread || !thread->m_isDM || !host || !popup->m_titleLabel) {
+        log::warn("chat header: anchor missing (thread {}, dm {}, layer {}, title {})",
+            thread != nullptr, thread && thread->m_isDM, host != nullptr, popup->m_titleLabel != nullptr);
+        return;
+    }
     if (!Mod::get()->getSettingValue<bool>("show-flame-in-friends")) return;
     if (!popup->m_titleLabel->getParent()) return;
 
@@ -276,14 +290,20 @@ void placeChatChip(ThreadViewPopup* popup, cocos2d::CCObject* target, cocos2d::S
     float x = nameRight + 7.f + half;
     if (x + half > limit) {
         float squeezed = limit - half;
-        if (squeezed - half < nameRight + 2.f) return; // no room: leave the header alone
+        if (squeezed - half < nameRight + 2.f) {
+            log::warn("chat header: no room (name ends at {}, limit {})", nameRight, limit);
+            return;
+        }
         x = squeezed;
     }
 
     auto pair = fstreak::StreakStore::get().pairForFriend(thread->m_accountID);
 
     auto flame = fstreak::FlameNode::create(SIZE, true);
-    if (!flame) return;
+    if (!flame) {
+        log::error("chat header: flame node failed (sprite frame missing?)");
+        return;
+    }
     if (pair) {
         flame->setStreak(pair->current);
     } else {
@@ -299,6 +319,7 @@ void placeChatChip(ThreadViewPopup* popup, cocos2d::CCObject* target, cocos2d::S
     menu->addChild(item);
     menu->setTag(kFlameTag);
     host->addChild(menu, 20);
+    log::info("chat header: flame drawn at ({}, {})", x, headerY);
 }
 
 /// Keeps the visible streak decorations in step with the mirror.
@@ -350,6 +371,9 @@ private:
 } // namespace
 
 $on_mod(Loaded) {
+    log::info("friendship-streaks {} loaded on gd {} ({})",
+        Mod::get()->getVersion().toNonVString(), GEODE_COMP_GD_VERSION, FSTREAK_PLATFORM);
+
     // One listener for every surface: the chat rows, the open chat and the card.
     fstreak::StreakStore::get().addListener([] {
         refreshStreakSurfaces();
@@ -363,7 +387,26 @@ class $modify(FriendshipStreakMenuLayer, MenuLayer) {
         // The menu scene is not the running scene yet while init runs, so attach on
         // the next frame or the ticker would be dropped with the loading scene.
         this->scheduleOnce(schedule_selector(FriendshipStreakMenuLayer::attachTicker), 0.2f);
-        fstreak::StreakStore::get().onMenuOpened();
+
+        auto& store = fstreak::StreakStore::get();
+        store.load();
+        store.onMenuOpened();
+
+        // Self report: proves the hooks are live and shows how much data the mirror
+        // holds, which is what decides whether anything can be drawn at all.
+        static bool reported = false;
+        if (!reported) {
+            reported = true;
+            bool flameOn = Mod::get()->getSettingValue<bool>("show-flame-in-friends");
+            log::info(
+                "friendship-streaks: menu up, {} pair(s), account {}, flame setting {}, server {}",
+                store.pairs().size(), store.hasAccount(), flameOn, store.configured()
+            );
+            Notification::create(
+                fmt::format("Streaks: {} pair(s), flame {}", store.pairs().size(), flameOn ? "on" : "off"),
+                NotificationIcon::Info
+            )->show();
+        }
         return true;
     }
 
@@ -403,12 +446,17 @@ class $modify(FriendshipStreakUserCell, FSTREAK_USER_CELL) {
             );
         }
         auto flame = fstreak::FlameNode::create(20.f, true);
-        if (!flame) return;
+        if (!flame) {
+            log::error("friend row {}: flame node failed (sprite frame missing?)", name);
+            return;
+        }
         flame->setTag(kFlameTag);
         flame->setStreak(streak);
         flame->setDimmed(streak <= 0);
         flame->setPosition(position);
         this->addChild(flame, 20);
+        log::info("friend row {}: flame drawn at ({}, {}), {} days, label {}",
+            name, position.x, position.y, streak, label != nullptr);
     }
 };
 #endif
@@ -425,12 +473,17 @@ class $modify(FriendshipStreakMessageCell, GJMessageCell) {
         int streak = pair ? pair->current : 0;
 
         auto flame = fstreak::FlameNode::create(20.f, true);
-        if (!flame) return;
+        if (!flame) {
+            log::error("message row: flame node failed (sprite frame missing?)");
+            return;
+        }
         flame->setTag(kFlameTag);
         flame->setStreak(streak);
         flame->setDimmed(streak <= 0);
         flame->setPosition({this->getContentSize().width - 46.f, this->getContentSize().height - 16.f});
         this->addChild(flame, 20);
+        log::info("message row: flame drawn, {} days, cell {}x{}",
+            streak, this->getContentSize().width, this->getContentSize().height);
     }
 };
 
