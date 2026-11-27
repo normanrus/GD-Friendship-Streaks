@@ -8,16 +8,16 @@ Shared (mutual) daily streaks between two paired GD players. The streak is shown
 
 ## Targets
 
-- GD 2.2081 with Geode SDK 5.11.2 (`mod.json` in the repo points here)
-- GD 2.2091 with Geode SDK 6.0.0
-- CI also builds Windows and macOS; iOS is disabled because Geode's own bindings fail to build on the runner (FMOD types missing), not because of mod code
+- GD 2.2091 with Geode SDK 6.0.0, Windows, macOS, Android32 and Android64
+- GD 2.2081 is **not** supported. It has no chat threads (`MessageThreadsPage` / `ThreadViewPopup`), so the whole "streak lives in the chat" design has nothing to attach to. The 2.2081 build and its `GJMessagePopup` fallback were deleted in v1.2.0; do not bring them back.
+- iOS is disabled because Geode's own bindings fail to build on the runner (FMOD types missing), not because of mod code
 
-Same sources for both; only `mod.json`'s `geode` and `gd` fields change. `scripts/build_all.sh` does both.
+One `mod.json`, one workflow (`.github/workflows/multi-platform.yml`), one combined `.geode`.
 
 ## Version differences that matter
 
 - GD 2.2091 renamed the friends list row: `GJUserCell` -> `GJCompactUserCell`. `src/main.cpp` picks the header with `__has_include` and defines `FSTREAK_USER_CELL`, so the `$modify` block and the `Base::method()` call both go through the macro.
-- Geode 6 takes `asp::Duration` for `WebRequest::timeout`, Geode 5 takes `std::chrono::seconds`. Guarded by `GEODE_COMP_GD_VERSION >= 22091` in `StreakApi.cpp`.
+- Geode 6 takes `asp::Duration` for `WebRequest::timeout`; the Geode 5 branch is gone.
 - `gd::string` no longer exists in Geode 6. Use the `toStdString` template in `main.cpp` instead of naming the type.
 - `$modify` passes the base to `geode::Modify<derived, base>`, so a macro expanding to the class name works fine.
 
@@ -27,6 +27,8 @@ Same sources for both; only `mod.json`'s `geode` and `gd` fields change. `script
 - Do not add a `CCNode` that owns a `CCMenu` into another `CCMenu`. Add it to the layer and position it from the anchor node's world position.
 - While `MenuLayer::init` runs the menu scene is not the running scene yet, so a helper node added to `getRunningScene()` there is dropped with the loading scene. Schedule the attach one frame later.
 - `CCLabelBMFont::getString()` returns `char const*` in Geode 5 and a string view in places in Geode 6; build text with `std::string(...)` rather than `.c_str()` on it.
+- Never walk a whole GD screen to find a label you want to decorate if the screen exposes one: `ProfilePage::m_usernameLabel` exists for exactly this. Walking the tree reads `getString()`/`m_sFntFile` on labels the mod does not own, which is where the profile page crash reports came from.
+- `ProfilePage::m_ownProfile` is true for the page you open from the main menu. Skip it: no pair can point at yourself, so decorating it can only touch a page that GD is still laying out.
 - Async callbacks that touch a popup must capture `geode::Ref<Popup>`; the user can close the window before the response arrives.
 - `mod.json`'s `geode` field has no `v` prefix.
 - The Geode 6 SDK checkout needs `bin/6.0.0/Geode.android{32,64}.so` from the release zips before CMake can link.
@@ -34,8 +36,8 @@ Same sources for both; only `mod.json`'s `geode` and `gd` fields change. `script
 
 ## Releasing
 
-1. Push to `main`. Both workflows build Windows, macOS, Android32 and Android64 and then a `package` job combines them into one `.geode` per GD version (artifacts `Build Output` and `Build Output 2.2091`).
-2. Download both artifacts, then upload them to the release as `friendship-streaks-v<ver>-gd2.2081-windows-macos-android.geode` and `...-gd2.2091-...`, plus a zip with both packages, the docs, `logo.png` and `server/`.
+1. Push to `main`. The workflow builds Windows, macOS, Android32 and Android64 and then a `package` job combines them into one `.geode` (artifact `Build Output`).
+2. Download the artifact and upload it as `friendship-streaks-v<ver>-gd2.2091-windows-macos-android.geode`, plus a zip with the package, the docs, `logo.png` and `server/`.
 3. Asset uploads go to `https://uploads.github.com/repos/<owner>/<repo>/releases/<id>/assets?name=<file>`; `api.github.com` returns 404 for uploads.
 4. The packaged `.geode` already contains `logo.png`, `about.md` and `changelog.md` from the repository root.
 
@@ -58,12 +60,11 @@ The mod parses exactly the JSON produced by `server/server.py` (`PairState::from
 
 `src/Platform.hpp` decides what the message integration can do:
 
-- `FSTREAK_CAN_OPEN_WRITE_POPUP` — `GJWriteMessagePopup::create` only has an address on Android for GD 2.2091 (all platforms for 2.2081). Elsewhere the friend window opens the profile page instead.
-- `FSTREAK_CAN_HOOK_MESSAGE` — GD 2.2091 does not bind `uploadMessageFinished` on Windows, so the hook and the automatic tracking are compiled out there and the window shows **Mark written**, which reports the event by pair id.
+- `FSTREAK_CAN_HOOK_MESSAGE` — GD 2.2091 does not bind `uploadMessageFinished` on Windows, so the hook and the automatic tracking are compiled out there. "I wrote today" is read from the loaded chat messages on every platform, so nothing is lost.
 
 - `FSTREAK_CAN_HOOK_USER_CELL` — GD 2.2091 has no macOS address for `GJCompactUserCell::loadFromScore`, so the friends list flame is compiled out there.
 
-All three come from `GEODE_COMP_GD_VERSION` (22081 / 22091) and the `GEODE_IS_*` macros. Check `build-<target>/bindings/bindings/Geode/CodegenData.json` (`bindings.win` / `bindings.android32`) before adding a call to a GD class: `missing` means the symbol is not available on that platform.
+Both come from the `GEODE_IS_*` macros. Check `build-<target>/bindings/bindings/Geode/CodegenData.json` (`bindings.win` / `bindings.android32`) before adding a call to a GD class: `missing` means the symbol is not available on that platform.
 
 ## Chat integration (GD 2.2091)
 

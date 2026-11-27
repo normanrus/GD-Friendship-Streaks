@@ -91,6 +91,16 @@ int main() {
     check(flameStage(1234) == FlameStage::Gold, "gold stays gold");
     check(std::string(flameStageName(FlameStage::Blue)) == "Blue", "stage name");
 
+    // Profile page badge: never on your own page, never for a dead streak, and the
+    // text stays singular/plural-free so both accounts read the same thing.
+    check(!shouldDecorateProfile(true, true, 5), "own profile is never decorated");
+    check(!shouldDecorateProfile(false, false, 5), "setting off hides the profile line");
+    check(!shouldDecorateProfile(false, true, 0), "no streak, no profile line");
+    check(shouldDecorateProfile(false, true, 1), "friend with a streak gets the line");
+    check(profileBadgeText(0).empty(), "no text without a streak");
+    check(profileBadgeText(1) == "1 day friendship streak", "profile text for 1 day");
+    check(profileBadgeText(12) == "12 day friendship streak", "profile text for 12 days");
+
 std::cout << "All friendship streak core tests passed.\n";
     return 0;
 }

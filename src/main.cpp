@@ -31,13 +31,9 @@
 #if __has_include(<Geode/binding/CustomListView.hpp>)
 #include <Geode/binding/CustomListView.hpp>
 #endif
-#if FSTREAK_HAS_THREADS
 #include <Geode/modify/GJThreadCell.hpp>
 #include <Geode/modify/MessageThreadsPage.hpp>
 #include <Geode/modify/ThreadViewPopup.hpp>
-#else
-#include <Geode/modify/GJMessagePopup.hpp>
-#endif
 
 #include "Notify.hpp"
 #include "StreakStore.hpp"
@@ -120,7 +116,6 @@ bool usesChatFont(CCLabelBMFont* label) {
     return std::string(label->m_sFntFile).find("chatFont") != std::string::npos;
 }
 
-#if FSTREAK_HAS_THREADS
 /// The chat row draws its preview and timestamp with chatFont.fnt, so the label
 /// that carries the friend name is the other one that matches the thread.
 CCLabelBMFont* threadNameLabel(cocos2d::CCNode* cell, std::string const& name) {
@@ -303,7 +298,6 @@ void placeChatChip(ThreadViewPopup* popup, cocos2d::CCObject* target, cocos2d::S
     menu->setTag(kFlameTag);
     host->addChild(menu, 20);
 }
-#endif // FSTREAK_HAS_THREADS
 
 /// Keeps the visible streak decorations in step with the mirror.
 void refreshStreakSurfaces() {
@@ -442,37 +436,36 @@ class $modify(FriendshipStreakProfilePage, ProfilePage) {
         if (!score) return;
 
         removeDecoration(this, kFlameTag);
-        if (!Mod::get()->getSettingValue<bool>("show-flame-in-friends")) return;
 
-        auto pair = fstreak::StreakStore::get().pairForFriend(score->m_accountID);
-        if (!pair || pair->current <= 0) return;
+        auto& store = fstreak::StreakStore::get();
+        store.load();
 
-        auto name = toStdString(score->m_userName);
-        CCLabelBMFont* label = nullptr;
-        std::vector<CCLabelBMFont*> labels;
-        collectLabels(this, labels);
-        for (auto candidate : labels) {
-            if (textMatches(labelText(candidate), name) && !usesChatFont(candidate)) {
-                label = candidate;
-                break;
-            }
-        }
+        auto settingOn = Mod::get()->getSettingValue<bool>("show-flame-in-friends");
+        auto pair = score->m_accountID > 0 ? store.pairForFriend(score->m_accountID) : std::nullopt;
+        int streak = pair ? pair->current : 0;
+
+        // Your own page is never decorated: a pair cannot point at yourself, and GD
+        // rebuilds the name label there, so the page stays exactly as vanilla.
+        if (!fstreak::shouldDecorateProfile(m_ownProfile, settingOn, streak)) return;
+
+        // GD keeps the label it drew the name into; using it avoids walking the
+        // whole page (comments list included) and reading labels we do not own.
+        auto label = m_usernameLabel;
         if (!label || !label->getParent()) return;
 
         auto line = CCLabelBMFont::create(
-            fmt::format("{} day friendship streak", pair->current).c_str(), "goldFont.fnt"
+            fstreak::profileBadgeText(streak).c_str(), "goldFont.fnt"
         );
         if (!line) return;
         line->setTag(kFlameTag);
         line->setScale(0.42f);
-        line->setColor(fstreak::FlameNode::stageColor(pair->current));
+        line->setColor(fstreak::FlameNode::stageColor(streak));
         line->setAnchorPoint({0.f, 0.5f});
         line->setPosition({label->getPositionX(), label->getPositionY() - 20.f});
-        label->getParent()->addChild(line, 20);
+        (m_mainLayer ? m_mainLayer : label->getParent())->addChild(line, 20);
     }
 };
 
-#if FSTREAK_HAS_THREADS
 class $modify(FriendshipStreakThreadCell, GJThreadCell) {
     void loadFromThread(GJMessageThread* thread) {
         GJThreadCell::loadFromThread(thread);
@@ -582,67 +575,6 @@ class $modify(FriendshipStreakThreadView, ThreadViewPopup) {
         fstreak::StreakInfoPopup::open(m_thread->m_accountID, toStdString(m_thread->m_userName));
     }
 };
-#else
-/// GD 2.2081 has no threads, so the flame sits in the open message window.
-class $modify(FriendshipStreakMessagePopup, GJMessagePopup) {
-    struct Fields {
-        int friendId = 0;
-        std::string friendName;
-    };
-
-    bool init(GJUserMessage* message) {
-        if (!GJMessagePopup::init(message)) return false;
-        if (!message || message->m_accountID <= 0) return true;
-
-        m_fields->friendId = message->m_accountID;
-        m_fields->friendName = toStdString(message->m_username);
-
-        auto& store = fstreak::StreakStore::get();
-        store.enterChat();
-        store.requestRefresh("message-open");
-
-        removeDecoration(this, kFlameTag);
-        if (!Mod::get()->getSettingValue<bool>("show-flame-in-friends")) return true;
-
-        auto pair = store.pairForFriend(message->m_accountID);
-
-        auto flame = fstreak::FlameNode::create(18.f, true);
-        if (!flame) return true;
-        if (pair) {
-            flame->setStreak(pair->current);
-        } else {
-            flame->setStreak(0);
-            flame->setDimmed(true);
-        }
-
-        auto item = CCMenuItemSpriteExtra::create(
-            flame, this, menu_selector(FriendshipStreakMessagePopup::onChip)
-        );
-        if (!item) return true;
-
-        auto menu = cocos2d::CCMenu::create();
-        menu->setPosition({this->getContentSize().width / 2.f - 96.f, this->getContentSize().height - 52.f});
-        menu->addChild(item);
-        menu->setTag(kFlameTag);
-        this->addChild(menu, 20);
-        return true;
-    }
-
-    void onExit() {
-        fstreak::StreakStore::get().leaveChat();
-        GJMessagePopup::onExit();
-    }
-
-    void downloadMessageFinished(GJUserMessage* message) {
-        GJMessagePopup::downloadMessageFinished(message);
-        fstreak::StreakStore::get().requestRefresh("message-downloaded");
-    }
-
-    void onChip(cocos2d::CCObject*) {
-        fstreak::StreakInfoPopup::open(m_fields->friendId, m_fields->friendName);
-    }
-};
-#endif
 
 #if FSTREAK_CAN_HOOK_MESSAGE
 class $modify(FriendshipStreakWriteMessage, GJWriteMessagePopup) {

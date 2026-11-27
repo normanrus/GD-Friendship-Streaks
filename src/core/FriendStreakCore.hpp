@@ -149,6 +149,19 @@ inline int milestoneIndex(int streak) {
     return -1;
 }
 
+/// Whether the profile page of this player should carry the streak line. Your own
+/// page never does: a friendship streak belongs to a pair, and your own score can
+/// never be your friend.
+inline bool shouldDecorateProfile(bool ownProfile, bool settingOn, int streak) {
+    return !ownProfile && settingOn && streak > 0;
+}
+
+/// Text of the line under the player name on the profile page.
+inline std::string profileBadgeText(int streak) {
+    if (streak <= 0) return {};
+    return std::to_string(streak) + " day friendship streak";
+}
+
 enum class TodayStatus {
     /// Neither side has written today yet.
     Nobody,
