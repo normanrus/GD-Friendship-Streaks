@@ -1,3 +1,12 @@
+# v1.2.3
+
+A flame in the main menu, and a report from every surface that should draw one.
+
+- The streak card is reachable from the main menu again: a flame sits left of the profile button, shows the longest running streak and opens the card. With no pair yet the card opens on the code exchange, so pairing no longer requires a chat.
+- If the mod's own flame sprite cannot be loaded the button falls back to a vanilla sprite instead of disappearing, and the launch toast says which one was used.
+- The launch toast now also reports whether the server account exists and whether the flame sprite loaded.
+- Each surface that should draw a flame shows one toast per launch with what it found: `chat row: dm true, id 1234, flame true`, `chat header: drawn at (x, y)`, `friend row: drawn at (x, y), 0 days, label true, cell 320x60`, or the reason it bailed out. A surface with no toast means its hook never ran.
+
 # v1.2.2
 
 Diagnostics build: tells us where the flame gets lost.
