@@ -1,3 +1,14 @@
+# v1.2.4
+
+The ticker is a real widget in the main menu instead of an invisible node on the scene.
+
+- Removed the node that Geode DevTools showed as `anonymous namespace::StreakTicker` at `(0, 0)` on the scene. It was never a visual: it only carried the one-second heartbeat that drives syncing, and it was parented to `CCScene` with z-order 999.
+- The heartbeat is now a scheduler target that is not a node at all, so background syncing still runs and the scene tree stays clean.
+- The visible ticker is a child of the layer that owns it: a `CCMenu` with id `friendship-streak-ticker` holding the flame and the day count, added to `MenuLayer` with z-order 5. It is placed from the profile button in the layer's own coordinates, so it keeps its spot on every resolution instead of sitting at the origin.
+- The ticker is deduplicated by node id and cleared in `onExit`, so navigating between screens no longer leaves copies behind.
+- The ticker follows the mirror: the number and the flame stage update as soon as the streak changes, and it stays dimmed while no streak is running.
+- If the mod's flame texture fails to load the ticker falls back to a vanilla sprite instead of rendering nothing.
+
 # v1.2.3
 
 A flame in the main menu, and a report from every surface that should draw one.

@@ -333,51 +333,90 @@ void placeChatChip(ThreadViewPopup* popup, cocos2d::CCObject* target, cocos2d::S
     diag("chat-header", fmt::format("chat header: drawn at ({}, {}), dm {}", x, headerY, thread->m_isDM));
 }
 
+namespace {
+// The ticker belongs to the layer that draws it, so it dies with that layer instead
+// of outliving it on the scene. Only a pointer is kept; the menu owns the node.
+cocos2d::CCNode* g_menuTicker = nullptr;
+fstreak::FlameNode* g_menuFlame = nullptr;
+} // namespace
+
+/// Longest running streak in the mirror, which is what the menu ticker shows.
+int bestStreak() {
+    int best = 0;
+    for (auto const& pair : fstreak::StreakStore::get().pairs()) best = std::max(best, pair.current);
+    return best;
+}
+
 /// Keeps the visible streak decorations in step with the mirror.
 void refreshStreakSurfaces() {
     // Rebuilding the rows re-runs loadFromThread, which redecorates every cell.
     if (g_refreshThreadList) g_refreshThreadList();
     if (g_refreshChat) g_refreshChat();
     fstreak::StreakInfoPopup::refreshOpen();
+
+    if (g_menuFlame) {
+        int best = bestStreak();
+        g_menuFlame->setStreak(best);
+        g_menuFlame->setDimmed(best <= 0);
+    }
 }
 
-/// One second heartbeat that drives background syncing.
-class StreakTicker : public cocos2d::CCNode {
+/// One second heartbeat that drives background syncing. The scheduler takes any
+/// CCObject as a target, so the mod needs no node in the scene for this.
+class StreakClock : public cocos2d::CCObject {
 public:
-    static StreakTicker* get() {
-        static StreakTicker* instance = nullptr;
+    static StreakClock* get() {
+        static StreakClock* instance = nullptr;
         if (!instance) {
-            instance = new StreakTicker();
-            if (!instance->init()) {
-                delete instance;
-                return nullptr;
-            }
+            instance = new StreakClock();
             instance->retain();
         }
         return instance;
     }
 
-    /// Re-attaches after a scene change; safe to call from any screen hook.
-    void attach() {
+    void start() {
+        if (m_started) return;
         auto director = cocos2d::CCDirector::get();
-        auto scene = director ? director->getRunningScene() : nullptr;
-        if (!scene || this->getParent() == scene) return;
-        this->removeFromParentAndCleanup(false);
-        scene->addChild(this, 999);
-    }
-
-private:
-    bool init() {
-        if (!CCNode::init()) return false;
-        this->setID("friendship-streak-ticker"_spr);
-        this->schedule(schedule_selector(StreakTicker::tick), 1.f);
-        return true;
+        auto scheduler = director ? director->getScheduler() : nullptr;
+        if (!scheduler) return;
+        m_started = true;
+        scheduler->scheduleSelector(schedule_selector(StreakClock::tick), this, 1.f, false);
     }
 
     void tick(float dt) {
         fstreak::StreakStore::get().onTick(dt);
     }
+
+private:
+    bool m_started = false;
 };
+
+/// Flame plus day count as a tappable item for a layer that owns its own layout.
+/// Returns a menu holding the item, and the flame through `flameOut` so the caller
+/// can refresh the number later.
+cocos2d::CCNode* makeStreakTicker(
+    int streak, cocos2d::CCObject* target, cocos2d::SEL_MenuHandler handler, fstreak::FlameNode** flameOut
+) {
+    if (flameOut) *flameOut = nullptr;
+
+    auto flame = fstreak::FlameNode::create(30.f, true);
+    cocos2d::CCNode* visual = flame;
+    if (flame) {
+        flame->setStreak(streak);
+        flame->setDimmed(streak <= 0);
+    } else {
+        visual = cocos2d::CCSprite::createWithSpriteFrameName("GJ_plusBtn_001.png");
+    }
+    if (!visual) return nullptr;
+
+    auto item = CCMenuItemSpriteExtra::create(visual, target, handler);
+    auto menu = cocos2d::CCMenu::create();
+    menu->setID("friendship-streak-ticker"_spr);
+    menu->addChild(item);
+
+    if (flameOut) *flameOut = flame;
+    return menu;
+}
 
 } // namespace
 
@@ -395,15 +434,13 @@ class $modify(FriendshipStreakMenuLayer, MenuLayer) {
     bool init() {
         if (!MenuLayer::init()) return false;
 
-        // The menu scene is not the running scene yet while init runs, so attach on
-        // the next frame or the ticker would be dropped with the loading scene.
-        this->scheduleOnce(schedule_selector(FriendshipStreakMenuLayer::attachTicker), 0.2f);
+        StreakClock::get()->start();
 
         auto& store = fstreak::StreakStore::get();
         store.load();
         store.onMenuOpened();
 
-        bool modSprite = this->addStreakButton(store);
+        bool modSprite = this->addStreakTicker();
 
         // Self report: proves the hooks are live and shows how much data the mirror
         // holds, which is what decides whether anything can be drawn at all.
@@ -425,50 +462,49 @@ class $modify(FriendshipStreakMenuLayer, MenuLayer) {
         return true;
     }
 
-    void attachTicker(float) {
-        if (auto ticker = StreakTicker::get()) ticker->attach();
+    /// The ticker is a child of this layer, so it is cleared with the layer and never
+    /// appears on the scene on its own.
+    void onExit() {
+        if (g_menuTicker && g_menuTicker->getParent() == this) {
+            g_menuTicker = nullptr;
+            g_menuFlame = nullptr;
+        }
+        MenuLayer::onExit();
     }
 
     /// Entry point that needs no chat screen and no pair: the card, and with it the
     /// code exchange, is one tap from the main menu.
-    bool addStreakButton(fstreak::StreakStore& store) {
-        if (this->getChildByTag(kFlameTag)) return true;
+    bool addStreakTicker() {
+        if (this->getChildByIDRecursive("friendship-streak-ticker"_spr)) return g_menuFlame != nullptr;
 
-        auto flame = fstreak::FlameNode::create(30.f, true);
-        bool modSprite = flame != nullptr;
-        cocos2d::CCNode* visual = flame;
-        if (!visual) visual = cocos2d::CCSprite::createWithSpriteFrameName("GJ_plusBtn_001.png");
-        if (!visual) return false;
-
-        int best = 0;
-        for (auto const& pair : store.pairs()) best = std::max(best, pair.current);
-        if (flame) {
-            flame->setStreak(best);
-            flame->setDimmed(best <= 0);
+        fstreak::FlameNode* flame = nullptr;
+        auto ticker = makeStreakTicker(
+            bestStreak(), this, menu_selector(FriendshipStreakMenuLayer::onStreakTicker), &flame
+        );
+        if (!ticker) {
+            log::error("main menu: no ticker node could be built");
+            return false;
         }
 
-        auto item = CCMenuItemSpriteExtra::create(
-            visual, this, menu_selector(FriendshipStreakMenuLayer::onStreakButton)
-        );
-        auto menu = cocos2d::CCMenu::create();
-        menu->setTag(kFlameTag);
-        menu->addChild(item);
-
-        // Left of the profile button so the two never cover each other; the corner is
-        // only a fallback for builds where the profile button is not there yet.
+        // Measured from the profile button in this layer's coordinates, so the ticker
+        // keeps its spot on every resolution instead of sitting at the origin.
         cocos2d::CCPoint spot = {this->getContentSize().width - 26.f, 26.f};
         if (m_profileButton && m_profileButton->getParent()) {
             auto parent = m_profileButton->getParent();
             spot = this->convertToNodeSpace(parent->convertToWorldSpace(m_profileButton->getPosition()));
             spot.x -= 46.f;
         }
-        menu->setPosition(spot);
-        this->addChild(menu, 100);
-        log::info("main menu: streak button at ({}, {}), mod sprite {}", spot.x, spot.y, modSprite);
-        return modSprite;
+        ticker->setPosition(spot);
+        ticker->setZOrder(5);
+        this->addChild(ticker);
+
+        g_menuTicker = ticker;
+        g_menuFlame = flame;
+        log::info("main menu: ticker at ({}, {}), flame sprite {}", spot.x, spot.y, flame != nullptr);
+        return flame != nullptr;
     }
 
-    void onStreakButton(cocos2d::CCObject*) {
+    void onStreakTicker(cocos2d::CCObject*) {
         if (fstreak::StreakInfoPopup::openBest()) return;
         fstreak::StreakInfoPopup::open(0, "your friend");
     }
