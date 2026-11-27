@@ -10,6 +10,7 @@ The streak is shared, so it only grows when **both** players show up. That is th
 
 - **Flame in your chats.** The flame and its day count sit next to the friend name in the chat list rows and in the title row of an open chat.
 - **Streak card.** Tapping the flame opens a small card with the current streak, the best streak, the start date, the last mutual day, the last seven days as dots, and what is still missing today. It also holds the link flow, so there is no separate screen to learn.
+- **A flame in the main menu**, left of the profile button: it shows your longest running streak and opens the streak card, which is also where a streak is started.
 - **Flames next to friends** in the chat list, the message list and the friends list. A friend with a running streak gets the bright flame and the day count, everyone else keeps a dimmed flame with no number, and only a friend's profile page shows the streak line.
 - **Flame colours** that grow with the streak: orange up to 24 days, blue at 25, purple at 50, gold at 100. Both players see the same colour because it is derived from the same day count.
 - **Notifications** when a streak grows, when it breaks, when a friend is waiting for your reply, and special messages on days 7, 14, 30, 50 and 100.
