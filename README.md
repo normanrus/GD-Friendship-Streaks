@@ -8,7 +8,7 @@ The streak is shared, so it only grows when **both** players show up. That is th
 
 ## What you get
 
-- **Flame in your chats.** GD 2.2091: the flame and its day count sit next to the friend name in the chat list rows and in the title row of an open chat. GD 2.2081: the flame sits in the open message window and in the message list.
+- **Flame in your chats.** The flame and its day count sit next to the friend name in the chat list rows and in the title row of an open chat.
 - **Streak card.** Tapping the flame opens a small card with the current streak, the best streak, the start date, the last mutual day, the last seven days as dots, and what is still missing today. It also holds the link flow, so there is no separate screen to learn.
 - **Flames next to friends** in the friends list and on the profile page, and only for friends that actually have a running streak.
 - **Flame colours** that grow with the streak: orange up to 24 days, blue at 25, purple at 50, gold at 100. Both players see the same colour because it is derived from the same day count.
@@ -21,9 +21,9 @@ Nothing about vanilla gameplay changes: the mod only decorates existing screens 
 
 | | |
 |---|---|
-| Geometry Dash | 2.2081 (Geode 5.11.2) or 2.2091 (Geode 6.0.0) |
+| Geometry Dash | 2.2091 with Geode 6.0.0 (2.2081 is not supported: it has no chat threads) |
 | Platform | Windows, macOS, Android 32/64 (iOS is untested and not built) |
-| Known limits on GD 2.2091 | Windows: the game does not expose the message callback, so the streak card shows **I wrote today** and you confirm the send yourself. macOS: the friends list row callback is unbound, so the flame in the friends list is not drawn (chats and the profile still show it) |
+| Known limits | Windows: the game does not expose the message upload callback, so "I wrote today" is read from the chat messages instead. macOS: the friends list row callback is unbound, so the flame in the friends list is not drawn (chats and the profile still show it) |
 | Account | a real Geometry Dash account, that is how the two players identify each other |
 | Server | one small sync server, see below |
 
@@ -34,14 +34,15 @@ Nothing about vanilla gameplay changes: the mod only decorates existing screens 
 3. Open the mod settings and set **Server URL** to your sync server.
 4. In game: open a chat with the friend, tap the dimmed flame next to their name, then **My code**.
 
-Pick the file that matches your GD version. This matters: a build made for 2.2081 will not load on 2.2091 and Geode will tell you the mod is for the wrong version.
+The package is built for GD 2.2091 only, so there is one file to pick:
 
 | Your game | Geode | Install this |
 |---|---|---|
-| GD 2.2081 | 5.11.2 | `friendship-streaks-v1.1.0-gd2.2081-windows-macos-android.geode` |
-| GD 2.2091 | 6.0.0 | `friendship-streaks-v1.1.0-gd2.2091-windows-macos-android.geode` |
+| GD 2.2091 | 6.0.0 | `friendship-streaks-v1.2.0-gd2.2091-windows-macos-android.geode` |
 
-Each of those single files contains the Windows, macOS and both Android binaries, and Geode loads the right one for your platform. If Geode reports the wrong GD version, the other file is the one you want: the version is baked into the package metadata and cannot be switched at install time.
+That single file contains the Windows, macOS and both Android binaries, and Geode loads the right one for your platform. On GD 2.2081 Geode will refuse it as the wrong version; 2.2081 has no chat threads, which is where the streak lives.
+
+If an older daily-streak mod (**GD Streaks**, `openhands.gd-streaks`) is still installed, remove it. It hooks the same main menu, keeps its own save data, and only ever loaded on 2.2081.
 
 ## Pairing with a friend
 
@@ -61,7 +62,7 @@ Only one code per account is active at a time, a code cannot be used to link to 
 - The current streak is the number of consecutive counted days ending today, or ending yesterday if today is still pending. Writing today never loses a streak, it only keeps it.
 - Missing one or more whole days resets the current streak to 0. The best streak is stored forever.
 - Days are UTC days on the server, so both players see the same day no matter their timezone. The client shows the server's day, not the local one, which is what makes the streak honest across timezones.
-- Writing to a friend is detected from the messages themselves: on GD 2.2091 the chat hands the loaded messages back after every send and refresh, on GD 2.2081 the message upload callback is used. Repeated messages on the same day do not count twice.
+- Writing to a friend is detected from the messages themselves: the chat hands the loaded messages back after every send and refresh. Repeated messages on the same day do not count twice.
 
 ## How fast the two accounts see each other
 
@@ -117,7 +118,7 @@ The mod keeps a local mirror of the last synced state, so the streak window, the
 ## Building
 
 ```sh
-export GEODE_SDK=$HOME/geode-sdk          # Geode 5.11.2 for GD 2.2081
+export GEODE_SDK=$HOME/geode-sdk          # Geode 6.0.0 for GD 2.2091
 export ANDROID_NDK=/path/to/android-ndk-r29
 
 cmake -B build-android64 -G Ninja -DCMAKE_BUILD_TYPE=Release \
@@ -126,9 +127,9 @@ cmake -B build-android64 -G Ninja -DCMAKE_BUILD_TYPE=Release \
 cmake --build build-android64
 ```
 
-Use `-DANDROID_ABI=armeabi-v7a` for the 32 bit build. For GD 2.2091, point `GEODE_SDK` at a Geode 6.0.0 checkout with its Android binaries installed and set `geode`/`gd` in `mod.json` to `6.0.0`/`2.2091`. `scripts/build_all.sh` does both variants in one go.
+Use `-DANDROID_ABI=armeabi-v7a` for the 32 bit build. The Geode checkout needs its Android binaries installed (`bin/6.0.0/Geode.android{32,64}.so`). `scripts/build_all.sh` builds every platform in one go.
 
-Windows and macOS builds run in CI: `.github/workflows/multi-platform.yml` builds GD 2.2081, `.github/workflows/multi-platform-2091.yml` retargets `mod.json` to Geode 6.0.0 and builds GD 2.2091. Each produces its own combined `.geode`.
+Windows and macOS builds run in CI: `.github/workflows/multi-platform.yml` builds GD 2.2091 on Windows, macOS, Android32 and Android64 and combines them into one `.geode`.
 
 ## Tests
 
@@ -155,4 +156,4 @@ tests/          host tests for the core
 
 - Streaks are shared state, so they need a server. There is no way around that: two devices have to agree on the same days.
 - The mod never reads your GD password or anything beyond the account ID and username you already have, and it never touches gameplay code.
-- GD 2.2091 renamed the friends list row class, so the friend list decoration is compiled against `GJUserCell` on 2.2081 and `GJCompactUserCell` on 2.2091. Everything else uses stable APIs.
+- GD 2.2091 renamed the friends list row class to `GJCompactUserCell`; the header is picked with `__has_include` so the mod keeps building if the name moves again.

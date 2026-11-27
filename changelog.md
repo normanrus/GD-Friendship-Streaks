@@ -1,3 +1,14 @@
+# v1.2.0
+
+GD 2.2091 only, and the profile page stops being touched where it should not be.
+
+- The mod now targets GD 2.2091 (Geode 6.0.0) only. 2.2081 has no chat threads, so the whole "streak lives in the chat" design has nothing to attach to there, and the 2.2081 build was a second, untested implementation of the same features. One package, one code path.
+- This also removes the overlap with the older **GD Streaks** mod (`openhands.gd-streaks`): that one is 2.2081 only, so the two can no longer load into the same game and share the main menu.
+- Your own profile page is no longer decorated at all. A friendship streak belongs to a pair, your own score can never be your friend, and the page the main menu button opens is rebuilt by the game while it is still laying out. Only a friend's profile shows the "N day friendship streak" line now.
+- The profile line is attached to the label the game itself drew the name into (`m_usernameLabel`) instead of scanning every label on the page, so the mod no longer reads text and font fields of labels it does not own, including the comments list.
+- The profile line no longer depends on the saved pair list having been read first: the mirror is loaded before the lookup, which is what made the line appear or disappear depending on which screen you opened first.
+- Deleted the 2.2081 fallbacks: the open message window flame, the message list flame, the flat message list handling and the Geode 5 timeout branch.
+
 # v1.1.1
 
 Cleanup pass on the chat integration, plus faster syncing.

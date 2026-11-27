@@ -32,11 +32,7 @@ void StreakApi::request(
     }
 
     auto request = web::WebRequest();
-#if defined(GEODE_COMP_GD_VERSION) && GEODE_COMP_GD_VERSION >= 22091
     request.timeout(asp::Duration::fromSecs(12));
-#else
-    request.timeout(std::chrono::seconds(12));
-#endif
     request.header("Accept", "application/json");
     request.userAgent(Mod::get()->getID() + "/" + Mod::get()->getVersion().toNonVString());
     if (!token.empty()) {

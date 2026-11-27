@@ -6,6 +6,9 @@ on:
     branches:
       - "**"
 
+# The mod targets GD 2.2091 (Geode 6). One workflow, one set of binaries: the
+# 2.2081 build was dropped together with the flat-message-list fallback.
+
 jobs:
   build:
     strategy:
